@@ -4,9 +4,6 @@ import subprocess
 import time
 from datetime import datetime
 
-from net import send_message
-from node import Node
-
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -22,7 +19,7 @@ def _scp(node_name, remote_path, local_path):
     return subprocess.run(["scp", f"{node_name}:{remote_path}", local_path])
 
 
-def collect_logs(node_names, log_dir="experiment"):
+def collect_logs(node_names, log_dir="experiment/results"):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = os.path.join(log_dir, timestamp)
     os.makedirs(run_dir, exist_ok=True)
@@ -42,7 +39,7 @@ def stop_docker_nodes(node_names):
 
 
 def main():
-    node_names = [f"node{i}" for i in range(1, 13)]
+    node_names = [f"node{i}" for i in range(1, 16)]
     stop_docker_nodes(node_names)
 
     launch_nodes(node_names)

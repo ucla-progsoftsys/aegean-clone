@@ -8,7 +8,10 @@ config = {
     'node7': {'type': 'mixer', 'next': 'node10'},
     'node8': {'type': 'mixer', 'next': 'node11'},
     'node9': {'type': 'mixer', 'next': 'node12'},
-    'node10': {'type': 'exec', 'next': 'node13'},
-    'node11': {'type': 'exec', 'next': 'node14'},
-    'node12': {'type': 'exec', 'next': 'node15'},
+    'node10': {'type': 'exec', 'verifiers': ('node13', 'node14', 'node15')},
+    'node11': {'type': 'exec', 'verifiers': ('node13', 'node14', 'node15')},
+    'node12': {'type': 'exec', 'verifiers': ('node13', 'node14', 'node15')},
+    'node13': {'type': 'verifier', 'next': 'node10'},
+    'node14': {'type': 'verifier', 'next': 'node11'},
+    'node15': {'type': 'verifier', 'next': 'node12'},
 }

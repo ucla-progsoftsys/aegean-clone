@@ -3,6 +3,7 @@ from client import Client
 from shim import Shim
 from mixer import Mixer
 from exec import Exec
+from verifier import Verifier
 from config import config
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,9 @@ if __name__ == "__main__":
     elif node_type == 'mixer':
         node = Mixer(args.name, host=args.host, port=args.port, next=config[args.name]['next'])
     elif node_type == 'exec':
-        node = Exec(args.name, host=args.host, port=args.port, next=config[args.name]['next'])
+        node = Exec(args.name, host=args.host, port=args.port, verifiers=config[args.name]['verifiers'])
+    elif node_type == 'verifier':
+        node = Verifier(args.name, host=args.host, port=args.port, next=config[args.name]['next'])
     else:
         logger.error(f"Unrecognized node type: {node_type}")
     
