@@ -28,15 +28,13 @@ def collect_logs(node_names, log_dir="experiment"):
     os.makedirs(run_dir, exist_ok=True)
     for name in node_names:
         local_path = os.path.join(run_dir, f"{name}.log")
-        _scp(name, "/tmp/node_server.log", local_path)
-
-
-def launch_docker_nodes(node_names):
+        _scp(name, "/tmp/node.log", local_path)
+        
+def launch_nodes(node_names):
     for name in node_names:
-        _ssh(name, "nohup python -u /app/src/node.py "
+        _ssh(name, "nohup python -u /app/src/start.py "
             f"--name {name} --host 0.0.0.0 --port 8000 "
-            "> /tmp/node_server.log 2>&1 &")
-
+            "> /tmp/node.log 2>&1 &")
 
 def stop_docker_nodes(node_names):
     for name in node_names:
@@ -44,19 +42,14 @@ def stop_docker_nodes(node_names):
 
 
 def main():
-    node_names = [f"node{i}" for i in range(1, 4)]
+    node_names = [f"node{i}" for i in range(1, 10)]
     stop_docker_nodes(node_names)
 
-    launch_docker_nodes(node_names)
-    time.sleep(1.0)
+    launch_nodes(node_names)
+    time.sleep(5.0)
 
-    try:
-        logger.info("Sending message to localhost:9001")
-        result = send_message("localhost", 9001, {"message": "hello"})
-        logger.info(f"Final result: {result}")
-    finally:
-        stop_docker_nodes(node_names)
-        collect_logs(node_names)
+    stop_docker_nodes(node_names)
+    collect_logs(node_names)
 
 
 if __name__ == "__main__":
