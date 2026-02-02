@@ -27,8 +27,13 @@ class Client(Node):
                 'request_id': request_id,
                 'timestamp': timestamp,
                 'sender': self.name,
-                'op': 'read',
-                'op_payload': {'key': '1'},
+                'op': 'spin_write_read',
+                'op_payload': {
+                    'spin_time': 0.1,
+                    'write_key': '1',
+                    'write_value': f'value_{request_id}',
+                    'read_key': '1',
+                },
             }
 
             logger.info(f"Client {self.name} sending request {request_id} to {self.next}")

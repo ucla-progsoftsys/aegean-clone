@@ -41,30 +41,27 @@ class Exec(Node):
     # Execute a single request and return the response
     def _execute_request(self, request, nd_seed, nd_timestamp):
         request_id = request.get('request_id')
-        sender = request.get('sender')
         op = request.get('op')
         op_payload = request.get('op_payload', {})
 
-        response = {'request_id': request_id, 'sender': sender}
+        response = {'request_id': request_id}
 
-        if op == 'read':
-            key = op_payload.get('key')
-            value = self.kv_store.get(key)
-            response['value'] = value
-            response['status'] = 'ok' if value is not None else 'not_found'
-
-        elif op == 'write':
-            key = op_payload.get('key')
-            value = op_payload.get('value')
-            self.kv_store[key] = value
-            response['status'] = 'ok'
-
-        elif op == 'read_write':
-            read_key = op_payload.get('read_key')
+        if op == 'spin_write_read':
+            spin_time = op_payload.get('spin_time', 0)
             write_key = op_payload.get('write_key')
             write_value = op_payload.get('write_value')
-            response['read_value'] = self.kv_store.get(read_key)
+            read_key = op_payload.get('read_key')
+
+            # Spin for the given time
+            if spin_time > 0:
+                time.sleep(spin_time)
+
+            # Write to key
             self.kv_store[write_key] = write_value
+
+            # Read from key
+            read_value = self.kv_store.get(read_key)
+            response['read_value'] = read_value
             response['status'] = 'ok'
 
         else:
@@ -201,6 +198,7 @@ class Exec(Node):
 
     # TODO: should state transfer be async? Meaning that should state transfer request
     # spin and wait for a response before processing other requests
+    # TODO: after state transfer, do we send back client the response?
     # Request state transfer from a replica that has the correct state
     def _request_state_transfer(self):
         for source_exec in self.peers:

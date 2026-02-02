@@ -21,6 +21,7 @@ class Shim(Node):
         msg_type = payload.get('type', 'request')
         if msg_type == 'response':
             # Handle response from exec - broadcast to all clients that sent the request
+            # TODO: Or do we wait for a quorum, and then broadcast
             request_id = payload.get('request_id')
             response_data = payload.get('response')
 
