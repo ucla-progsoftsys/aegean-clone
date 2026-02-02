@@ -5,10 +5,12 @@ import time, logging, hashlib, json, copy
 logger = logging.getLogger(__name__)
 
 class Exec(Node):
-    def __init__(self, name, host, port, verifiers, shim):
+    # TODO: request pipelining, parallel pipelining
+    def __init__(self, name, host, port, verifiers, shim, peers):
         super().__init__(name, host, port)
         self.verifiers = verifiers
         self.shim = shim
+        self.peers = peers
         self.kv_store = {'1': '111'}
 
         # State management for rollback
@@ -80,6 +82,8 @@ class Exec(Node):
             return self._handle_verify_response(payload)
         elif msg_type == 'batch':
             return self._handle_batch(payload)
+        elif msg_type == 'state_transfer_request':
+            return self._handle_state_transfer_request(payload)
         else:
             raise ValueError(f'Unknown message type: {msg_type}')
 
@@ -93,7 +97,7 @@ class Exec(Node):
 
         # Execute all parallelBatches and collect outputs
         outputs = []
-        for pb_idx, parallel_batch in enumerate(parallel_batches):
+        for parallel_batch in parallel_batches:
             pb_outputs = []
             # TODO: In prototype, execute sequentially within parallelBatch
             # (Real impl would use threading for parallel execution)
@@ -164,12 +168,24 @@ class Exec(Node):
                     }
                     send_message(self.shim, '8000', response_msg)
                     logger.debug(f"{self.name}: Sent response for request {request_id} to shim {self.shim}")
-                
+
                 self.prev_hash = agreed_token
             else:
-                # Our state diverged - need state transfer
-                logger.warning(f"{self.name}: State diverged, need state transfer")
-                # TODO: Request state transfer from other replicas
+                # TODO: rollback? (I guess we need to introduce parallel pipelining first)
+                # Our state diverged - need state transfer from a replica with correct state
+                logger.warning(f"{self.name}: State diverged at seq_num {seq_num}, "
+                              f"requesting state transfer")
+
+                # Request state transfer from a peer replica
+                success = self._request_state_transfer()
+
+                if success:
+                    logger.info(f"{self.name}: State transfer successful for seq_num {seq_num}")
+                else:
+                    # If state transfer fails, fall back to rollback
+                    logger.error(f"{self.name}: State transfer failed, rolling back")
+                    self.kv_store = copy.deepcopy(self.stable_state)
+                    self.force_sequential = True
 
         elif decision == 'rollback':
             logger.info(f"{self.name}: Rolling back to seq_num {self.stable_seq_num}")
@@ -182,3 +198,64 @@ class Exec(Node):
             del self.pending_responses[seq_num]
 
         return {'status': 'processed', 'decision': decision}
+
+    # TODO: should state transfer be async? Meaning that should state transfer request
+    # spin and wait for a response before processing other requests
+    # Request state transfer from a replica that has the correct state
+    def _request_state_transfer(self):
+        for source_exec in self.peers:
+            try:
+                logger.info(f"{self.name}: Requesting state transfer from {source_exec}")
+
+                request_msg = {
+                    'type': 'state_transfer_request',
+                    'requesting_exec': self.name
+                }
+
+                response = send_message(source_exec, '8000', request_msg)
+
+                if response and response.get('status') == 'ok':
+                    transferred_state = response.get('state')
+                    transferred_stable_seq_num = response.get('stable_seq_num')
+                    transferred_prev_hash = response.get('prev_hash')
+
+                    # Only apply if the provided stable seq num is higher than ours
+                    if transferred_stable_seq_num <= self.stable_seq_num:
+                        logger.warning(f"{self.name}: Received stable_seq_num {transferred_stable_seq_num} "
+                                     f"from {source_exec} is not higher than ours ({self.stable_seq_num}), "
+                                     f"trying another replica")
+                        continue
+
+                    # Apply the transferred state
+                    self.kv_store = copy.deepcopy(transferred_state)
+                    self.stable_state = copy.deepcopy(transferred_state)
+                    self.stable_seq_num = transferred_stable_seq_num
+                    self.prev_hash = transferred_prev_hash
+                    self.force_sequential = False
+
+                    logger.info(f"{self.name}: Successfully applied state transfer from {source_exec}, "
+                               f"now at stable_seq_num {self.stable_seq_num}")
+
+                    return True
+
+                else:
+                    logger.warning(f"{self.name}: State transfer from {source_exec} failed: {response}")
+
+            except Exception as e:
+                logger.error(f"{self.name}: Error requesting state transfer from {source_exec}: {e}")
+
+        return False
+
+    # Handle incoming state transfer request from a diverged replica
+    def _handle_state_transfer_request(self, payload):
+        requesting_exec = payload.get('requesting_exec')
+
+        logger.info(f"{self.name}: Received state transfer request from {requesting_exec}, "
+                   f"providing stable state at seq_num {self.stable_seq_num}")
+
+        return {
+            'status': 'ok',
+            'state': self.stable_state,
+            'stable_seq_num': self.stable_seq_num,
+            'prev_hash': self.prev_hash
+        }

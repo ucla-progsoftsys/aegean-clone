@@ -29,7 +29,7 @@ if __name__ == "__main__":
     elif node_type == 'mixer':
         node = Mixer(args.name, host=args.host, port=args.port, next=config[args.name]['next'], shim=config[args.name]['shim'])
     elif node_type == 'exec':
-        node = Exec(args.name, host=args.host, port=args.port, verifiers=config[args.name]['verifiers'], shim=config[args.name]['shim'])
+        node = Exec(args.name, host=args.host, port=args.port, verifiers=config[args.name]['verifiers'], shim=config[args.name]['shim'], peers=config[args.name]['peers'])
     elif node_type == 'verifier':
         node = Verifier(args.name, host=args.host, port=args.port, execs=config[args.name]['execs'])
     else:
