@@ -10,7 +10,8 @@ import (
 
 type Mixer struct {
 	*Node
-	Next          string
+	Next string
+	// Origin shim for response routing
 	Shim          string
 	batch         []map[string]any
 	batchSize     int

@@ -1,5 +1,3 @@
-// Package nodes contains node implementations.
-// Translates: src_py/nodes/exec.py
 package nodes
 
 import (
@@ -24,15 +22,18 @@ type pendingResponse struct {
 
 type Exec struct {
 	*Node
-	Verifiers        []string
-	Shim             string
-	Peers            []string
-	kvStore          map[string]string
-	stableState      map[string]string
-	stableSeqNum     int
-	prevHash         string
+	Verifiers []string
+	Shim      string
+	Peers     []string
+	kvStore   map[string]string
+	// State management for rollback
+	stableState  map[string]string
+	stableSeqNum int
+	prevHash     string
+	// Pending responses (held until commit)
 	pendingResponses map[int]pendingResponse
-	forceSequential  bool
+	// Sequential execution flag (set after rollback)
+	forceSequential bool
 }
 
 // TODO: request pipelining, parallel pipelining
@@ -58,6 +59,7 @@ func (e *Exec) Start() {
 
 func (e *Exec) computeStateHash(state map[string]string, outputs []map[string]any, prevHash string, seqNum int) string {
 	// TODO: Merkle tree
+	// Compute Merkle-tree-style hash of state and outputs
 	data := map[string]any{
 		"seq_num":   seqNum,
 		"prev_hash": prevHash,
@@ -74,6 +76,7 @@ func (e *Exec) executeRequest(request map[string]any, ndSeed int64, ndTimestamp 
 	op, _ := request["op"].(string)
 	opPayload, _ := request["op_payload"].(map[string]any)
 
+	// Execute a single request and return the response
 	response := map[string]any{"request_id": requestID}
 
 	switch op {
@@ -83,11 +86,14 @@ func (e *Exec) executeRequest(request map[string]any, ndSeed int64, ndTimestamp 
 		writeValue := getString(opPayload, "write_value")
 		readKey := getString(opPayload, "read_key")
 
+		// Spin for the given time
 		if spinTime > 0 {
 			time.Sleep(time.Duration(spinTime * float64(time.Second)))
 		}
 
+		// Write to key
 		e.kvStore[writeKey] = writeValue
+		// Read from key
 		response["read_value"] = e.kvStore[readKey]
 		response["status"] = "ok"
 	default:
@@ -131,6 +137,7 @@ func (e *Exec) handleBatch(payload map[string]any) map[string]any {
 
 	log.Printf("%s: Executing batch %d with %d parallelBatches", e.Name, seqNum, len(parallelBatches))
 
+	// Execute all parallelBatches and collect outputs
 	outputs := make([]map[string]any, 0)
 	for _, pbAny := range parallelBatches {
 		pbSlice, ok := pbAny.([]any)
@@ -139,6 +146,7 @@ func (e *Exec) handleBatch(payload map[string]any) map[string]any {
 		}
 		for _, reqAny := range pbSlice {
 			// TODO: In prototype, execute sequentially within parallelBatch
+			// (Real impl would use threading for parallel execution)
 			reqMap, ok := reqAny.(map[string]any)
 			if !ok {
 				continue
@@ -148,6 +156,7 @@ func (e *Exec) handleBatch(payload map[string]any) map[string]any {
 		}
 	}
 
+	// Compute token (hash of state + outputs)
 	token := e.computeStateHash(e.kvStore, outputs, e.prevHash, seqNum)
 	e.pendingResponses[seqNum] = pendingResponse{
 		outputs: outputs,
@@ -155,6 +164,7 @@ func (e *Exec) handleBatch(payload map[string]any) map[string]any {
 		token:   token,
 	}
 
+	// Send VERIFY message to all verifiers
 	verifyMsg := map[string]any{
 		"type":      "verify",
 		"seq_num":   seqNum,
@@ -182,14 +192,17 @@ func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
 		return map[string]any{"status": "no_pending_for_seq"}
 	}
 
+	// Handle verification response from verifier
 	switch decision {
 	case "commit":
 		if pending.token == agreedToken {
+			// Mark state as stable and release responses
 			log.Printf("%s: Committing seq_num %d", e.Name, seqNum)
 			e.stableState = copyStringMap(pending.state)
 			e.stableSeqNum = seqNum
 			e.forceSequential = false
 
+			// Send responses back to the server-shim for broadcasting to clients
 			for _, output := range pending.outputs {
 				requestID := output["request_id"]
 				responseMsg := map[string]any{
@@ -204,10 +217,12 @@ func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
 			e.prevHash = agreedToken
 		} else {
 			// TODO: rollback? (I guess we need to introduce parallel pipelining first)
+			// Our state diverged - need state transfer from a replica with correct state
 			log.Printf("%s: State diverged at seq_num %d, requesting state transfer", e.Name, seqNum)
 			if e.requestStateTransfer() {
 				log.Printf("%s: State transfer successful for seq_num %d", e.Name, seqNum)
 			} else {
+				// If state transfer fails, fall back to rollback
 				log.Printf("%s: State transfer failed, rolling back", e.Name)
 				e.kvStore = copyStringMap(e.stableState)
 				e.forceSequential = true
@@ -220,6 +235,7 @@ func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
 		log.Printf("%s: Will execute next batch sequentially", e.Name)
 	}
 
+	// Cleanup
 	delete(e.pendingResponses, seqNum)
 	return map[string]any{"status": "processed", "decision": decision}
 }
@@ -228,6 +244,7 @@ func (e *Exec) requestStateTransfer() bool {
 	// TODO: should state transfer be async? Meaning that should state transfer request
 	// spin and wait for a response before processing other requests
 	// TODO: after state transfer, do we send back client the response?
+	// Request state transfer from a replica that has the correct state
 	for _, sourceExec := range e.Peers {
 		log.Printf("%s: Requesting state transfer from %s", e.Name, sourceExec)
 		requestMsg := map[string]any{
@@ -255,11 +272,13 @@ func (e *Exec) requestStateTransfer() bool {
 		transferredStableSeqNum := getInt(response, "stable_seq_num")
 		transferredPrevHash, _ := response["prev_hash"].(string)
 
+		// Only apply if the provided stable seq num is higher than ours
 		if transferredStableSeqNum <= e.stableSeqNum {
 			log.Printf("%s: Received stable_seq_num %d from %s is not higher than ours (%d)", e.Name, transferredStableSeqNum, sourceExec, e.stableSeqNum)
 			continue
 		}
 
+		// Apply the transferred state
 		converted := make(map[string]string, len(transferredState))
 		for key, value := range transferredState {
 			converted[key] = fmt.Sprintf("%v", value)
@@ -357,7 +376,7 @@ func getSlice(m map[string]any, key string) []any {
 	return []any{}
 }
 
-// marshalSorted produces JSON with sorted keys to match Python's json.dumps(sort_keys=True).
+// marshalSorted produces JSON with sorted keys to match Python's json.dumps(sort_keys=True)
 func marshalSorted(v any) []byte {
 	var buf bytes.Buffer
 	writeSorted(&buf, v)

@@ -1,5 +1,3 @@
-// Package nodes contains node implementations.
-// Translates: src_py/nodes/verifier.py
 package nodes
 
 import (
@@ -11,15 +9,22 @@ import (
 
 type Verifier struct {
 	*Node
-	Execs        []string
-	u            int
-	r            int
+	Execs []string
+	// TODO: replace hard-coded values with formulas
+	// Fault tolerance parameters (simplified: u=1, r=0 for CFT)
+	u int
+	r int
+	// Quorum sizes
 	execQuorum   int
 	verifyQuorum int
-	tokens       map[int]map[string]map[string]struct{}
-	committed    map[int]string
-	prevHashes   map[int]string
-	mu           sync.Mutex
+	// State tracking per sequence number
+	// seq_num -> { token -> set(exec_ids) }
+	tokens map[int]map[string]map[string]struct{}
+	// seq_num -> committed token (or empty string)
+	committed map[int]string
+	// seq_num -> prev_hash from tokens
+	prevHashes map[int]string
+	mu         sync.Mutex
 }
 
 func NewVerifier(name, host string, port int, execs []string) *Verifier {
@@ -46,6 +51,7 @@ func (v *Verifier) Start() {
 func (v *Verifier) checkAgreement(seqNum int) (string, string) {
 	tokenCounts := v.tokens[seqNum]
 
+	// Find token with most support
 	bestToken := ""
 	bestCount := 0
 	for token, execIDs := range tokenCounts {
@@ -60,10 +66,12 @@ func (v *Verifier) checkAgreement(seqNum int) (string, string) {
 		totalResponses += len(execIDs)
 	}
 
+	// If we have quorum of matching tokens -> commit
 	if bestCount >= v.execQuorum {
 		return "commit", bestToken
 	}
 
+	// If we've heard from all execs and no quorum -> rollback
 	if totalResponses >= len(v.Execs) {
 		log.Printf("Verifier %s: Divergence detected for seq %d", v.Name, seqNum)
 		return "rollback", bestToken
@@ -97,6 +105,7 @@ func (v *Verifier) HandleMessage(payload map[string]any) map[string]any {
 	execID, _ := payload["exec_id"].(string)
 
 	if seqNum > 1 {
+		// Validate prev_hash matches what we expect (if we have committed seq_num-1)
 		prevCommitted, ok := v.committed[seqNum-1]
 		if ok && prevHash != prevCommitted {
 			log.Printf("Verifier %s: Invalid prev_hash from %s", v.Name, execID)
@@ -107,10 +116,12 @@ func (v *Verifier) HandleMessage(payload map[string]any) map[string]any {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
+	// Already committed this seq_num?
 	if committedToken, ok := v.committed[seqNum]; ok {
 		return map[string]any{"status": "already_committed", "token": committedToken}
 	}
 
+	// Record this token
 	if _, ok := v.tokens[seqNum]; !ok {
 		v.tokens[seqNum] = make(map[string]map[string]struct{})
 	}
@@ -122,6 +133,7 @@ func (v *Verifier) HandleMessage(payload map[string]any) map[string]any {
 
 	log.Printf("Verifier %s: seq=%d, token=%s..., from %s, count=%d", v.Name, seqNum, truncateToken(token), execID, len(v.tokens[seqNum][token]))
 
+	// Check if we can reach agreement
 	decision, agreedToken := v.checkAgreement(seqNum)
 
 	switch decision {
@@ -129,11 +141,13 @@ func (v *Verifier) HandleMessage(payload map[string]any) map[string]any {
 		v.committed[seqNum] = agreedToken
 		log.Printf("Verifier %s: COMMIT seq=%d", v.Name, seqNum)
 		v.sendVerifyResponse(seqNum, "commit", agreedToken)
+		// Cleanup
 		delete(v.tokens, seqNum)
 		return map[string]any{"status": "committed", "token": agreedToken}
 	case "rollback":
 		log.Printf("Verifier %s: ROLLBACK seq=%d", v.Name, seqNum)
 		v.sendVerifyResponse(seqNum, "rollback", agreedToken)
+		// Cleanup
 		delete(v.tokens, seqNum)
 		return map[string]any{"status": "rollback"}
 	}

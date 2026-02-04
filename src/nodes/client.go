@@ -1,5 +1,3 @@
-// Package nodes contains node implementations.
-// Translates: src_py/nodes/client.py
 package nodes
 
 import (
@@ -81,6 +79,7 @@ func (c *Client) HandleMessage(payload map[string]any) map[string]any {
 		return map[string]any{"status": "already_completed"}
 	}
 
+	// In CFT mode with a single exec pipeline, one response is sufficient
 	log.Printf("Client %s: Received response for request %v: %v", c.Name, requestID, response)
 	c.completedRequests[key] = struct{}{}
 	// TODO: In full BFT mode, would wait for f+1 matching responses

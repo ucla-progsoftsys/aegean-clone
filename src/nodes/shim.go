@@ -1,5 +1,3 @@
-// Package nodes contains node implementations.
-// Translates: src_py/nodes/shim.py
 package nodes
 
 import (
@@ -42,6 +40,7 @@ func (s *Shim) HandleMessage(payload map[string]any) map[string]any {
 		requestID := payload["request_id"]
 		responseData, _ := payload["response"].(map[string]any)
 
+		// Handle response from exec - broadcast to all clients that sent the request
 		// TODO: Or do we wait for a quorum, and then broadcast
 		log.Printf("%s: Broadcasting response for request %v to %d clients: %v", s.Name, requestID, len(s.Clients), s.Clients)
 
@@ -61,6 +60,7 @@ func (s *Shim) HandleMessage(payload map[string]any) map[string]any {
 		return map[string]any{"status": "response_broadcast", "recipients": s.Clients}
 	}
 
+	// Handle incoming client request - wait for quorum then forward
 	requestID := payload["request_id"]
 	sender, _ := payload["sender"].(string)
 
