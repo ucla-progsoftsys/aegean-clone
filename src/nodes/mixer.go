@@ -1,5 +1,3 @@
-// Package nodes contains node implementations.
-// Translates: src_py/nodes/mixer.py
 package nodes
 
 import (
@@ -47,7 +45,9 @@ func (m *Mixer) batchFlusher() {
 		m.mu.Lock()
 		// TODO: different mixers may have different timings of flushing, this may send different parallelBatches to exec, causing divergence
 		if len(m.batch) > 0 && time.Since(m.lastBatchTime) >= m.batchTimeout {
-			m.flushBatchLocked()
+			// TODO: undeterministic mixer is leading to divergence frequently
+			// Reenable timeout flushing when mixer is properly implemented
+			// m.flushBatchLocked()
 		}
 		m.mu.Unlock()
 	}
