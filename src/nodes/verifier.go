@@ -96,6 +96,7 @@ func (v *Verifier) sendVerifyResponse(seqNum int, decision, token string) {
 	}
 }
 
+// TODO: Any of out-of-order issues?
 func (v *Verifier) HandleMessage(payload map[string]any) map[string]any {
 	log.Printf("Handler called on %s with payload: %v", v.Name, payload)
 
