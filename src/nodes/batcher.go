@@ -11,14 +11,16 @@ import (
 // Batcher groups client requests into ordered batches as described in Eve's execution stage
 // It assigns a sequence number to each batch and attaches nondeterminism data
 type Batcher struct {
-	Name          string
-	NextCh        chan<- map[string]any
-	Execs         []string
-	LocalName     string
-	isPrimary     bool
-	batch         []map[string]any
-	batchSize     int
-	batchTimeout  time.Duration
+	Name      string
+	NextCh    chan<- map[string]any
+	Execs     []string
+	LocalName string
+	isPrimary bool
+	// Accumulates incoming client requests until flushed
+	batch        []map[string]any
+	batchSize    int
+	batchTimeout time.Duration
+	// Monotonic batch sequence number
 	seqNum        int
 	mu            sync.Mutex
 	lastBatchTime time.Time
@@ -53,6 +55,7 @@ func (b *Batcher) batchFlusher() {
 	for {
 		time.Sleep(b.batchTimeout)
 		b.mu.Lock()
+		// Flush on timeout if there are pending requests
 		if len(b.batch) > 0 && time.Since(b.lastBatchTime) >= b.batchTimeout {
 			b.flushBatchLocked()
 		}
@@ -75,6 +78,7 @@ func (b *Batcher) flushBatchLocked() {
 	b.seqNum++
 	b.lastBatchTime = time.Now()
 
+	// Attach nondeterminism data for consistent execution across replicas
 	message := map[string]any{
 		"type":         "batch",
 		"seq_num":      b.seqNum,
@@ -99,6 +103,7 @@ func (b *Batcher) flushBatchLocked() {
 func (b *Batcher) HandleRequestMessage(payload map[string]any) map[string]any {
 	log.Printf("Handler called on %s with payload: %v", b.Name, payload)
 
+	// TODO: should we forward to primary + also check if primary is live?
 	if !b.isPrimary {
 		return map[string]any{"status": "ignored_non_primary"}
 	}
@@ -113,3 +118,5 @@ func (b *Batcher) HandleRequestMessage(payload map[string]any) map[string]any {
 
 	return map[string]any{"status": "batched"}
 }
+
+// TODO: allow primaries to rotate, on batcher failures
