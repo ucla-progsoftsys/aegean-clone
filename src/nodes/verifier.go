@@ -10,7 +10,7 @@ import (
 type Verifier struct {
 	Name  string
 	Execs []string
-	// Local component channel (required)
+	// Local component channel
 	ExecCh    chan<- map[string]any
 	LocalName string
 	// TODO: replace hard-coded values with formulas
@@ -40,10 +40,10 @@ func NewVerifier(name string, execs []string, localName string, execCh chan<- ma
 		log.Fatalf("verifier component requires localName")
 	}
 	v := &Verifier{
-		Name:  name,
-		Execs: execs,
+		Name:      name,
+		Execs:     execs,
 		LocalName: localName,
-		ExecCh: execCh,
+		ExecCh:    execCh,
 		// TODO: replace hard-coded values with formulas
 		u:            1,
 		r:            0,

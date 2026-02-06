@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-// Server combines shim, mixer, exec, and verifier into one node.
+// Server combines shim, mixer, exec, and verifier into one node
 type Server struct {
 	*Node
 	Shim     *Shim
@@ -12,14 +12,16 @@ type Server struct {
 	Exec     *Exec
 	Verifier *Verifier
 
-	shimToMixer     chan map[string]any
-	mixerToExec     chan map[string]any
-	execToVerifier  chan map[string]any
-	verifierToExec  chan map[string]any
-	execToShim      chan map[string]any
+	// Internal message buses between components
+	shimToMixer    chan map[string]any
+	mixerToExec    chan map[string]any
+	execToVerifier chan map[string]any
+	verifierToExec chan map[string]any
+	execToShim     chan map[string]any
 }
 
 func NewServer(name, host string, port int, clients []string, verifiers []string, peers []string, execs []string) *Server {
+	// Buffered channels to decouple component work
 	shimToMixer := make(chan map[string]any, 256)
 	mixerToExec := make(chan map[string]any, 256)
 	execToVerifier := make(chan map[string]any, 256)
@@ -27,14 +29,15 @@ func NewServer(name, host string, port int, clients []string, verifiers []string
 	execToShim := make(chan map[string]any, 256)
 
 	server := &Server{
-		Node:            NewNode(name, host, port),
-		shimToMixer:     shimToMixer,
-		mixerToExec:     mixerToExec,
-		execToVerifier:  execToVerifier,
-		verifierToExec:  verifierToExec,
-		execToShim:      execToShim,
+		Node:           NewNode(name, host, port),
+		shimToMixer:    shimToMixer,
+		mixerToExec:    mixerToExec,
+		execToVerifier: execToVerifier,
+		verifierToExec: verifierToExec,
+		execToShim:     execToShim,
 	}
 
+	// Init each component
 	server.Shim = NewShim(fmt.Sprintf("%s/shim", name), shimToMixer, clients)
 	server.Mixer = NewMixer(fmt.Sprintf("%s/mixer", name), mixerToExec)
 	server.Exec = NewExec(fmt.Sprintf("%s/exec", name), verifiers, peers, name, execToVerifier, execToShim)
@@ -46,8 +49,11 @@ func NewServer(name, host string, port int, clients []string, verifiers []string
 }
 
 func (s *Server) Start() {
+	// TODO: deprecate this with batcher
+	// Mixer uses timer-driven flusher
 	s.Mixer.StartBatchFlusher()
 
+	// Wire component loops
 	go func() {
 		for msg := range s.shimToMixer {
 			s.Mixer.HandleMessage(msg)
@@ -82,6 +88,7 @@ func (s *Server) Start() {
 }
 
 func (s *Server) HandleMessage(payload map[string]any) map[string]any {
+	// Route by message type to the correct component
 	msgType, _ := payload["type"].(string)
 	if msgType == "" || msgType == "request" {
 		return s.Shim.HandleMessage(payload)
