@@ -7,38 +7,45 @@ import (
 // Server combines shim, mixer, exec, and verifier into one node
 type Server struct {
 	*Node
-	Shim     *Shim
-	Mixer    *Mixer
-	Exec     *Exec
-	Verifier *Verifier
+	Shim             *Shim
+	Batcher          *Batcher
+	Mixer            *Mixer
+	Exec             *Exec
+	Verifier         *Verifier
+	isPrimaryBatcher bool
 
 	// Internal message buses between components
-	shimToMixer    chan map[string]any
+	shimToBatcher  chan map[string]any
+	batcherToMixer chan map[string]any
 	mixerToExec    chan map[string]any
 	execToVerifier chan map[string]any
 	verifierToExec chan map[string]any
 	execToShim     chan map[string]any
 }
 
-func NewServer(name, host string, port int, clients []string, verifiers []string, peers []string, execs []string) *Server {
+func NewServer(name, host string, port int, clients []string, verifiers []string, peers []string, execs []string, isPrimaryBatcher bool) *Server {
 	// Buffered channels to decouple component work
-	shimToMixer := make(chan map[string]any, 256)
+	shimToBatcher := make(chan map[string]any, 256)
+	batcherToMixer := make(chan map[string]any, 256)
 	mixerToExec := make(chan map[string]any, 256)
 	execToVerifier := make(chan map[string]any, 256)
 	verifierToExec := make(chan map[string]any, 256)
 	execToShim := make(chan map[string]any, 256)
 
 	server := &Server{
-		Node:           NewNode(name, host, port),
-		shimToMixer:    shimToMixer,
-		mixerToExec:    mixerToExec,
-		execToVerifier: execToVerifier,
-		verifierToExec: verifierToExec,
-		execToShim:     execToShim,
+		Node:             NewNode(name, host, port),
+		shimToBatcher:    shimToBatcher,
+		batcherToMixer:   batcherToMixer,
+		mixerToExec:      mixerToExec,
+		execToVerifier:   execToVerifier,
+		verifierToExec:   verifierToExec,
+		execToShim:       execToShim,
+		isPrimaryBatcher: isPrimaryBatcher,
 	}
 
 	// Init each component
-	server.Shim = NewShim(fmt.Sprintf("%s/shim", name), shimToMixer, clients)
+	server.Shim = NewShim(fmt.Sprintf("%s/shim", name), shimToBatcher, clients)
+	server.Batcher = NewBatcher(fmt.Sprintf("%s/batcher", name), batcherToMixer, execs, name, isPrimaryBatcher)
 	server.Mixer = NewMixer(fmt.Sprintf("%s/mixer", name), mixerToExec)
 	server.Exec = NewExec(fmt.Sprintf("%s/exec", name), verifiers, peers, name, execToVerifier, execToShim)
 	server.Exec.ExecID = name
@@ -49,14 +56,20 @@ func NewServer(name, host string, port int, clients []string, verifiers []string
 }
 
 func (s *Server) Start() {
-	// TODO: deprecate this with batcher
-	// Mixer uses timer-driven flusher
-	s.Mixer.StartBatchFlusher()
+	if s.isPrimaryBatcher {
+		s.Batcher.StartBatchFlusher()
+	}
 
 	// Wire component loops
 	go func() {
-		for msg := range s.shimToMixer {
-			s.Mixer.HandleRequestMessage(msg)
+		for msg := range s.shimToBatcher {
+			s.Batcher.HandleRequestMessage(msg)
+		}
+	}()
+
+	go func() {
+		for msg := range s.batcherToMixer {
+			s.Mixer.HandleBatchMessage(msg)
 		}
 	}()
 
@@ -91,10 +104,15 @@ func (s *Server) HandleMessage(payload map[string]any) map[string]any {
 	// Route by message type to the correct component
 	msgType, _ := payload["type"].(string)
 	if msgType == "" || msgType == "request" {
+		if !s.isPrimaryBatcher {
+			return map[string]any{"status": "ignored_non_primary"}
+		}
 		return s.Shim.HandleRequestMessage(payload)
 	}
 
 	switch msgType {
+	case "batch":
+		return s.Mixer.HandleBatchMessage(payload)
 	case "verify":
 		return s.Verifier.HandleVerifyMessage(payload)
 	case "verify_response":

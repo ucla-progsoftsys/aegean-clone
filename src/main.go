@@ -34,7 +34,7 @@ func main() {
 	case "client":
 		node = nodes.NewClient(*name, *host, *port, cfg.Next)
 	case "server":
-		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Verifiers, cfg.Peers, cfg.Execs)
+		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Verifiers, cfg.Peers, cfg.Execs, cfg.IsPrimaryBatcher)
 	default:
 		log.Fatalf("unrecognized node type: %s", cfg.Type)
 	}
