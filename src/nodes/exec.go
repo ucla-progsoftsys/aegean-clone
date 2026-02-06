@@ -42,6 +42,7 @@ type Exec struct {
 }
 
 // TODO: request pipelining, parallel pipelining
+// TODO: implement locking
 func NewExec(name, host string, port int, verifiers []string, shim string, peers []string) *Exec {
 	exec := &Exec{
 		Node:             NewNode(name, host, port),

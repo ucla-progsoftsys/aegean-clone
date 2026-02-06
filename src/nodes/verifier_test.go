@@ -64,6 +64,38 @@ func expectVerifierMessage(t *testing.T, ch <-chan map[string]any, wantDecision 
 	}
 }
 
+func expectVerifierMessageSeq(t *testing.T, ch <-chan map[string]any, wantDecision string, wantSeq int) map[string]any {
+	t.Helper()
+	deadline := time.Now().Add(750 * time.Millisecond)
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			t.Fatalf("timed out waiting for decision %q seq %d", wantDecision, wantSeq)
+		}
+		select {
+		case msg := <-ch:
+			if gotDecision, _ := msg["decision"].(string); gotDecision == wantDecision {
+				seqRaw, ok := msg["seq_num"]
+				if !ok {
+					continue
+				}
+				seqNum := 0
+				switch v := seqRaw.(type) {
+				case float64:
+					seqNum = int(v)
+				case int:
+					seqNum = v
+				}
+				if seqNum == wantSeq {
+					return msg
+				}
+			}
+		case <-time.After(remaining):
+			t.Fatalf("timed out waiting for decision %q seq %d", wantDecision, wantSeq)
+		}
+	}
+}
+
 // Two matching exec tokens reach quorum and trigger commit responses to execs
 func TestVerifierCommitOnQuorum(t *testing.T) {
 	ts := startVerifierTestServer(t)
@@ -380,5 +412,56 @@ func TestVerifierDelayedSecondTokenCommits(t *testing.T) {
 	msg := expectVerifierMessage(t, ts.received, "commit")
 	if msg["token"] != "tokA" {
 		t.Fatalf("expected commit token tokA, got %v", msg["token"])
+	}
+}
+
+// Out-of-order seq with prev_hash is buffered until seq-1 commits
+func TestVerifierBuffersUntilPrevCommitted(t *testing.T) {
+	ts := startVerifierTestServer(t)
+	defer ts.close()
+
+	v := NewVerifier("ver1", "127.0.0.1", 7002, []string{"127.0.0.1", "127.0.0.1"})
+
+	// Buffer seq 2 tokens that depend on seq 1
+	resp1 := v.HandleMessage(map[string]any{
+		"seq_num":   2,
+		"token":     "tok2",
+		"prev_hash": "tok1",
+		"exec_id":   "exec1",
+	})
+	if resp1["status"] != "buffered" {
+		t.Fatalf("expected buffered for seq 2 before seq 1 commit, got %v", resp1["status"])
+	}
+	resp2 := v.HandleMessage(map[string]any{
+		"seq_num":   2,
+		"token":     "tok2",
+		"prev_hash": "tok1",
+		"exec_id":   "exec2",
+	})
+	if resp2["status"] != "buffered" {
+		t.Fatalf("expected buffered for seq 2 before seq 1 commit, got %v", resp2["status"])
+	}
+	if v.tokens[2] != nil {
+		t.Fatalf("expected seq 2 tokens not recorded while buffered")
+	}
+
+	// Commit seq 1, which should flush and commit seq 2
+	v.HandleMessage(map[string]any{
+		"seq_num":   1,
+		"token":     "tok1",
+		"prev_hash": "",
+		"exec_id":   "exec1",
+	})
+	v.HandleMessage(map[string]any{
+		"seq_num":   1,
+		"token":     "tok1",
+		"prev_hash": "",
+		"exec_id":   "exec2",
+	})
+
+	expectVerifierMessageSeq(t, ts.received, "commit", 1)
+	expectVerifierMessageSeq(t, ts.received, "commit", 2)
+	if v.committed[2] != "tok2" {
+		t.Fatalf("expected seq 2 committed to tok2, got %v", v.committed[2])
 	}
 }

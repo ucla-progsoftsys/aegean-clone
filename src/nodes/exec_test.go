@@ -244,6 +244,79 @@ func TestExecVerifyMismatchTriggersStateTransfer(t *testing.T) {
 	}
 }
 
+// Out-of-order batches are buffered until the missing seq arrives
+func TestExecBuffersOutOfOrderBatches(t *testing.T) {
+	ts := startTestServer(t, nil)
+	defer ts.close()
+
+	exec := NewExec("exec1", "127.0.0.1", 7001, []string{"127.0.0.1"}, "127.0.0.1", nil)
+
+	batch2 := map[string]any{
+		"type":    "batch",
+		"seq_num": 2,
+		"parallel_batches": []any{
+			[]any{makeSpinRequest("r2", "k2", "v2", "1")},
+		},
+	}
+	resp2 := exec.HandleMessage(batch2)
+	if resp2["status"] != "buffered" {
+		t.Fatalf("expected buffered status for seq 2, got %v", resp2["status"])
+	}
+	if _, ok := exec.pendingResponses[2]; ok {
+		t.Fatalf("expected no pending response for seq 2 before seq 1 arrives")
+	}
+
+	batch1 := map[string]any{
+		"type":    "batch",
+		"seq_num": 1,
+		"parallel_batches": []any{
+			[]any{makeSpinRequest("r1", "k1", "v1", "1")},
+		},
+	}
+	exec.HandleMessage(batch1)
+
+	if _, ok := exec.pendingResponses[1]; !ok {
+		t.Fatalf("expected pending response for seq 1 after flush")
+	}
+	if _, ok := exec.pendingResponses[2]; !ok {
+		t.Fatalf("expected pending response for seq 2 after flush")
+	}
+
+	_ = ts
+}
+
+// Verify responses arriving before their batches are buffered and flushed later
+func TestExecBuffersVerifyBeforeBatch(t *testing.T) {
+	ts := startTestServer(t, nil)
+	defer ts.close()
+
+	exec := NewExec("exec1", "127.0.0.1", 7001, []string{"127.0.0.1"}, "127.0.0.1", nil)
+
+	verifyResp := map[string]any{
+		"type":     "verify_response",
+		"seq_num":  1,
+		"decision": "commit",
+		"token":    "mismatch-token",
+	}
+	resp := exec.HandleMessage(verifyResp)
+	if resp["status"] != "buffered" {
+		t.Fatalf("expected buffered status for verify response, got %v", resp["status"])
+	}
+
+	batch1 := map[string]any{
+		"type":    "batch",
+		"seq_num": 1,
+		"parallel_batches": []any{
+			[]any{makeSpinRequest("r1", "k1", "v1", "1")},
+		},
+	}
+	exec.HandleMessage(batch1)
+
+	if _, ok := exec.pendingResponses[1]; ok {
+		t.Fatalf("expected pending response cleared after buffered verify flush")
+	}
+}
+
 // Token mismatch falls back to rollback when state transfer fails
 func TestExecVerifyMismatchFallbackRollback(t *testing.T) {
 	ts := startTestServer(t, func(req map[string]any) map[string]any {
