@@ -92,8 +92,66 @@ func makeParallelBatches(requests ...map[string]any) [][]map[string]any {
 func newTestExec(name string, verifiers []string, peers []string) (*Exec, chan map[string]any, chan map[string]any) {
 	verifierCh := make(chan map[string]any, 64)
 	shimCh := make(chan map[string]any, 64)
-	exec := NewExec(name, verifiers, peers, name, verifierCh, shimCh)
+	exec := NewExec(name, verifiers, peers, name, verifierCh, shimCh, testExecuteRequest, testHandleResponse)
 	return exec, verifierCh, shimCh
+}
+
+func testExecuteRequest(e *Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+	requestID := request["request_id"]
+	op, _ := request["op"].(string)
+	opPayload, _ := request["op_payload"].(map[string]any)
+
+	response := map[string]any{"request_id": requestID}
+
+	switch op {
+	case "spin_write_read":
+		spinTime := getFloatTest(opPayload, "spin_time")
+		writeKey := getStringTest(opPayload, "write_key")
+		writeValue := getStringTest(opPayload, "write_value")
+		readKey := getStringTest(opPayload, "read_key")
+
+		if spinTime > 0 {
+			time.Sleep(time.Duration(spinTime * float64(time.Second)))
+		}
+
+		e.WriteKV(writeKey, writeValue)
+		response["read_value"] = e.ReadKV(readKey)
+		response["status"] = "ok"
+	default:
+		response["status"] = "error"
+		response["error"] = "Unknown op: " + op
+	}
+
+	_ = ndSeed
+	_ = ndTimestamp
+	return response
+}
+
+func testHandleResponse(_ *Exec, payload map[string]any) map[string]any {
+	return map[string]any{"status": "ok", "request_id": payload["request_id"]}
+}
+
+func getStringTest(m map[string]any, key string) string {
+	if value, ok := m[key]; ok {
+		if s, ok := value.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+func getFloatTest(m map[string]any, key string) float64 {
+	if value, ok := m[key]; ok {
+		switch v := value.(type) {
+		case float64:
+			return v
+		case int:
+			return float64(v)
+		case int64:
+			return float64(v)
+		}
+	}
+	return 0
 }
 
 // Executes a batch, records a snapshot, and emits a verify message with the computed token
@@ -115,6 +173,7 @@ func TestExecHandleBatchSendsVerifyAndTracksPending(t *testing.T) {
 	if resp["status"] != "executed" {
 		t.Fatalf("expected status executed, got %v", resp["status"])
 	}
+	exec.flushNextVerify()
 
 	pending, ok := exec.pendingResponses[1]
 	if !ok {
@@ -124,7 +183,7 @@ func TestExecHandleBatchSendsVerifyAndTracksPending(t *testing.T) {
 		t.Fatalf("expected 2 outputs, got %d", len(pending.outputs))
 	}
 
-	expectedToken := exec.computeStateHash(exec.kvStore, pending.outputs, exec.prevHash, 1)
+	expectedToken := exec.computeStateHash(pending.state, pending.outputs, exec.prevHash, 1)
 	if pending.token != expectedToken {
 		t.Fatalf("expected pending token %s, got %s", expectedToken, pending.token)
 	}

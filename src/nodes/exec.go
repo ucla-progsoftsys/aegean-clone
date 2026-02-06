@@ -19,7 +19,15 @@ type pendingResponse struct {
 	outputs []map[string]any
 	state   map[string]string
 	token   string
+	// verifySent indicates whether a verify message has been sent for this seq.
+	verifySent bool
 }
+
+// ExecuteRequestFunc handles a single request for an exec node.
+type ExecuteRequestFunc func(e *Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any
+
+// ExecuteResponseFunc handles a response message for an exec node.
+type ExecuteResponseFunc func(e *Exec, payload map[string]any) map[string]any
 
 type Exec struct {
 	Name      string
@@ -45,16 +53,28 @@ type Exec struct {
 	verifyBuffer  *common.OOOBuffer[map[string]any]
 	nextBatchSeq  int
 	nextVerifySeq int
+	// Request execution hook
+	ExecuteRequest ExecuteRequestFunc
+	// Response handling hook
+	HandleResponse ExecuteResponseFunc
+	// Response sink for forwarding (e.g. shim)
+	ResponseSink func(payload map[string]any) map[string]any
 }
 
 // TODO: request pipelining, parallel pipelining
 // TODO: implement locking
-func NewExec(name string, verifiers []string, peers []string, localName string, verifierCh chan<- map[string]any, shimCh chan<- map[string]any) *Exec {
+func NewExec(name string, verifiers []string, peers []string, localName string, verifierCh chan<- map[string]any, shimCh chan<- map[string]any, executeRequest ExecuteRequestFunc, handleResponse ExecuteResponseFunc) *Exec {
 	if verifierCh == nil || shimCh == nil {
 		log.Fatalf("exec component requires non-nil channels")
 	}
 	if localName == "" {
 		log.Fatalf("exec component requires localName")
+	}
+	if executeRequest == nil {
+		log.Fatalf("exec component requires ExecuteRequest")
+	}
+	if handleResponse == nil {
+		log.Fatalf("exec component requires HandleResponse")
 	}
 	exec := &Exec{
 		Name:             name,
@@ -64,6 +84,8 @@ func NewExec(name string, verifiers []string, peers []string, localName string, 
 		LocalName:        localName,
 		VerifierCh:       verifierCh,
 		ShimCh:           shimCh,
+		ExecuteRequest:   executeRequest,
+		HandleResponse:   handleResponse,
 		kvStore:          map[string]string{"1": "111"},
 		stableSeqNum:     0,
 		prevHash:         strings.Repeat("0", 64),
@@ -91,39 +113,19 @@ func (e *Exec) computeStateHash(state map[string]string, outputs []map[string]an
 	return hex.EncodeToString(hash[:])
 }
 
-func (e *Exec) executeRequest(request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
-	requestID := request["request_id"]
-	op, _ := request["op"].(string)
-	opPayload, _ := request["op_payload"].(map[string]any)
+func (e *Exec) ReadKV(key string) string {
+	return e.kvStore[key]
+}
 
-	// Execute a single request and return the response
-	response := map[string]any{"request_id": requestID}
+func (e *Exec) WriteKV(key, value string) {
+	e.kvStore[key] = value
+}
 
-	switch op {
-	case "spin_write_read":
-		spinTime := getFloat(opPayload, "spin_time")
-		writeKey := getString(opPayload, "write_key")
-		writeValue := getString(opPayload, "write_value")
-		readKey := getString(opPayload, "read_key")
-
-		// Spin for the given time
-		if spinTime > 0 {
-			time.Sleep(time.Duration(spinTime * float64(time.Second)))
-		}
-
-		// Write to key
-		e.kvStore[writeKey] = writeValue
-		// Read from key
-		response["read_value"] = e.kvStore[readKey]
-		response["status"] = "ok"
-	default:
-		response["status"] = "error"
-		response["error"] = fmt.Sprintf("Unknown op: %s", op)
+func (e *Exec) ForwardResponse(payload map[string]any) map[string]any {
+	if e.ResponseSink == nil {
+		return map[string]any{"status": "error", "error": "response sink not configured"}
 	}
-
-	_ = ndSeed
-	_ = ndTimestamp
-	return response
+	return e.ResponseSink(payload)
 }
 
 func (e *Exec) HandleBatchMessage(payload map[string]any) map[string]any {
@@ -175,10 +177,42 @@ func (e *Exec) flushNextBatch() bool {
 
 func (e *Exec) flushNextVerify() bool {
 	e.mu.Lock()
-	_, ok := e.pendingResponses[e.nextVerifySeq]
+	pending, ok := e.pendingResponses[e.nextVerifySeq]
+	stableSeqNum := e.stableSeqNum
 	e.mu.Unlock()
 	if !ok {
 		return false
+	}
+	if e.nextVerifySeq != stableSeqNum+1 {
+		return false
+	}
+	// Compute token with committed prevHash to avoid divergence
+	if !pending.verifySent {
+		token := e.computeStateHash(pending.state, pending.outputs, e.prevHash, e.nextVerifySeq)
+		pending.token = token
+		pending.verifySent = true
+		e.mu.Lock()
+		e.pendingResponses[e.nextVerifySeq] = pending
+		e.mu.Unlock()
+
+		verifyMsg := map[string]any{
+			"type":      "verify",
+			"seq_num":   e.nextVerifySeq,
+			"token":     token,
+			"prev_hash": e.prevHash,
+			"exec_id":   e.ExecID,
+		}
+
+		for _, verifier := range e.Verifiers {
+			if verifier == e.LocalName && e.VerifierCh != nil {
+				e.VerifierCh <- verifyMsg
+				continue
+			}
+			if _, err := common.SendMessage(verifier, 8000, verifyMsg); err != nil {
+				log.Printf("Failed to send to verifier %s: %v", verifier, err)
+			}
+		}
+		return true
 	}
 	msgs := e.verifyBuffer.Pop(e.nextVerifySeq)
 	if len(msgs) == 0 {
@@ -213,41 +247,20 @@ func (e *Exec) handleBatch(payload map[string]any) map[string]any {
 		for _, reqMap := range pbAny {
 			// TODO: In prototype, execute sequentially within parallelBatch
 			// (Real impl would use threading for parallel execution)
-			output := e.executeRequest(reqMap, ndSeed, ndTimestamp)
+			output := e.ExecuteRequest(e, reqMap, ndSeed, ndTimestamp)
 			outputs = append(outputs, output)
 		}
 	}
 
-	// Compute token (hash of state + outputs)
-	token := e.computeStateHash(e.kvStore, outputs, e.prevHash, seqNum)
+	// TODO: check that all requests in the batch are finished before verification phase
 	e.mu.Lock()
 	e.pendingResponses[seqNum] = pendingResponse{
 		outputs: outputs,
 		state:   copyStringMap(e.kvStore),
-		token:   token,
+		token:   "",
 	}
 	e.mu.Unlock()
-
-	// Send VERIFY message to all verifiers
-	verifyMsg := map[string]any{
-		"type":      "verify",
-		"seq_num":   seqNum,
-		"token":     token,
-		"prev_hash": e.prevHash,
-		"exec_id":   e.ExecID,
-	}
-
-	for _, verifier := range e.Verifiers {
-		if verifier == e.LocalName && e.VerifierCh != nil {
-			e.VerifierCh <- verifyMsg
-			continue
-		}
-		if _, err := common.SendMessage(verifier, 8000, verifyMsg); err != nil {
-			log.Printf("Failed to send to verifier %s: %v", verifier, err)
-		}
-	}
-
-	return map[string]any{"status": "executed", "seq_num": seqNum, "token": token}
+	return map[string]any{"status": "executed", "seq_num": seqNum}
 }
 
 func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
@@ -414,15 +427,6 @@ func copyStringMap(input map[string]string) map[string]string {
 	return out
 }
 
-func getString(m map[string]any, key string) string {
-	if value, ok := m[key]; ok {
-		if s, ok := value.(string); ok {
-			return s
-		}
-	}
-	return ""
-}
-
 func getFloat(m map[string]any, key string) float64 {
 	if value, ok := m[key]; ok {
 		switch v := value.(type) {
@@ -464,7 +468,6 @@ func getInt64(m map[string]any, key string) int64 {
 	}
 	return 0
 }
-
 
 // marshalSorted produces JSON with sorted keys to match Python's json.dumps(sort_keys=True)
 func marshalSorted(v any) []byte {

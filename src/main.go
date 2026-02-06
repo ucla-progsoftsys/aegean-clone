@@ -32,9 +32,33 @@ func main() {
 	var node starter
 	switch cfg.Type {
 	case "client":
-		node = nodes.NewClient(*name, *host, *port, cfg.Next)
+		clientWorkflow := cfg.ClientWorkflow
+		if clientWorkflow == "" {
+			clientWorkflow = "default"
+		}
+		clientFn := clientWorkflows[clientWorkflow]
+		if clientFn == nil {
+			log.Fatalf("unknown client workflow %q for node %s", clientWorkflow, *name)
+		}
+		node = nodes.NewClient(*name, *host, *port, cfg.Next, clientFn)
 	case "server":
-		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Verifiers, cfg.Peers, cfg.Execs, cfg.IsPrimaryBatcher)
+		execWorkflow := cfg.ExecWorkflow
+		if execWorkflow == "" {
+			execWorkflow = "default"
+		}
+		execFn := execWorkflows[execWorkflow]
+		if execFn == nil {
+			log.Fatalf("unknown exec workflow %q for node %s", execWorkflow, *name)
+		}
+		responseWorkflow := cfg.ResponseWorkflow
+		if responseWorkflow == "" {
+			responseWorkflow = "default"
+		}
+		responseFn := responseWorkflows[responseWorkflow]
+		if responseFn == nil {
+			log.Fatalf("unknown response workflow %q for node %s", responseWorkflow, *name)
+		}
+		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Verifiers, cfg.Peers, cfg.Execs, cfg.IsPrimaryBatcher, execFn, responseFn)
 	default:
 		log.Fatalf("unrecognized node type: %s", cfg.Type)
 	}

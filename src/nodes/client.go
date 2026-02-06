@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	"time"
-
-	"aegean/common"
 )
 
 type Client struct {
@@ -14,63 +11,26 @@ type Client struct {
 	Next              []string
 	completedRequests map[string]struct{}
 	mu                sync.Mutex
+	RequestLogic      func(c *Client)
 }
 
-func NewClient(name, host string, port int, next []string) *Client {
+func NewClient(name, host string, port int, next []string, requestLogic func(c *Client)) *Client {
+	if requestLogic == nil {
+		log.Fatalf("client requires RequestLogic")
+	}
 	client := &Client{
 		Node:              NewNode(name, host, port),
 		Next:              next,
 		completedRequests: make(map[string]struct{}),
+		RequestLogic:      requestLogic,
 	}
 	client.Node.HandleMessage = client.HandleMessage
 	return client
 }
 
 func (c *Client) Start() {
-	go c.clientWorkflow()
+	go c.RequestLogic(c)
 	c.Node.Start()
-}
-
-func (c *Client) clientWorkflow() {
-	// Wait for other nodes to be turned on. TODO: improvable
-	time.Sleep(2 * time.Second)
-
-	logger := GetClientLogger()
-
-	for requestID := 1; requestID <= 10; requestID++ {
-		timestamp := float64(time.Now().UnixNano()) / 1e9
-
-		request := map[string]any{
-			"request_id": requestID,
-			"timestamp":  timestamp,
-			"sender":     c.Name,
-			"op":         "spin_write_read",
-			"op_payload": map[string]any{
-				"spin_time":   0.1,
-				"write_key":   "1",
-				"write_value": "value_" + itoa(requestID),
-				"read_key":    "1",
-			},
-		}
-
-		expectedResult := map[string]any{
-			"read_value": "value_" + itoa(requestID),
-			"request_id": requestID,
-			"status":     "ok",
-		}
-		log.Printf("Client %s sending request %d to %v", c.Name, requestID, c.Next)
-
-		for _, nextNode := range c.Next {
-			_, err := common.SendMessage(nextNode, 8000, request)
-			if err != nil {
-				log.Printf("Failed to send to %s: %v", nextNode, err)
-				logger.LogRequest(requestID, nextNode, "error", request, expectedResult)
-				continue
-			}
-			log.Printf("Ack from shim %s", nextNode)
-			logger.LogRequest(requestID, nextNode, "ack", request, expectedResult)
-		}
-	}
 }
 
 func (c *Client) HandleMessage(payload map[string]any) map[string]any {
@@ -101,10 +61,6 @@ func (c *Client) HandleMessage(payload map[string]any) map[string]any {
 	logger.LogResponse(requestID, sender, payload, response)
 
 	return map[string]any{"status": "response_received", "request_id": requestID}
-}
-
-func itoa(value int) string {
-	return fmt.Sprintf("%d", value)
 }
 
 func toKey(value any) string {

@@ -47,7 +47,7 @@ def stop_docker_nodes(node_names):
 
 
 def main():
-    node_names = [f"node{i}" for i in range(1, 7)]
+    node_names = [f"node{i}" for i in range(1, 10)]
     client_names = [f"node{i}" for i in range(1, 4)]
     logger.info("Experiment starting")
     stop_docker_nodes(node_names)

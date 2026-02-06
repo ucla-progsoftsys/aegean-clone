@@ -2,6 +2,7 @@ package nodes
 
 import (
 	"log"
+	"strings"
 
 	"aegean/common"
 )
@@ -56,6 +57,7 @@ func (s *Shim) HandleRequestMessage(payload map[string]any) map[string]any {
 func (s *Shim) HandleResponseMessage(payload map[string]any) map[string]any {
 	requestID := payload["request_id"]
 	responseData, _ := payload["response"].(map[string]any)
+	sender := nodeNameFromComponent(s.Name)
 
 	// Handle response from exec - broadcast to all clients that sent the request
 	// TODO: Or do we wait for a quorum, and then broadcast
@@ -66,6 +68,7 @@ func (s *Shim) HandleResponseMessage(payload map[string]any) map[string]any {
 			"type":       "response",
 			"request_id": requestID,
 			"response":   responseData,
+			"sender":     sender,
 		}
 		if _, err := common.SendMessage(client, 8000, clientResponse); err != nil {
 			log.Printf("%s: Failed to send response to %s: %v", s.Name, client, err)
@@ -75,4 +78,14 @@ func (s *Shim) HandleResponseMessage(payload map[string]any) map[string]any {
 	}
 
 	return map[string]any{"status": "response_broadcast", "recipients": s.Clients}
+}
+
+func nodeNameFromComponent(name string) string {
+	if name == "" {
+		return ""
+	}
+	if idx := strings.IndexByte(name, '/'); idx >= 0 {
+		return name[:idx]
+	}
+	return name
 }

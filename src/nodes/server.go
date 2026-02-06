@@ -23,7 +23,7 @@ type Server struct {
 	execToShim     chan map[string]any
 }
 
-func NewServer(name, host string, port int, clients []string, verifiers []string, peers []string, execs []string, isPrimaryBatcher bool) *Server {
+func NewServer(name, host string, port int, clients []string, verifiers []string, peers []string, execs []string, isPrimaryBatcher bool, executeRequest ExecuteRequestFunc, responseHandler ExecuteResponseFunc) *Server {
 	// Buffered channels to decouple component work
 	shimToBatcher := make(chan map[string]any, 256)
 	batcherToMixer := make(chan map[string]any, 256)
@@ -47,8 +47,9 @@ func NewServer(name, host string, port int, clients []string, verifiers []string
 	server.Shim = NewShim(fmt.Sprintf("%s/shim", name), shimToBatcher, clients)
 	server.Batcher = NewBatcher(fmt.Sprintf("%s/batcher", name), batcherToMixer, execs, name, isPrimaryBatcher)
 	server.Mixer = NewMixer(fmt.Sprintf("%s/mixer", name), mixerToExec)
-	server.Exec = NewExec(fmt.Sprintf("%s/exec", name), verifiers, peers, name, execToVerifier, execToShim)
+	server.Exec = NewExec(fmt.Sprintf("%s/exec", name), verifiers, peers, name, execToVerifier, execToShim, executeRequest, responseHandler)
 	server.Exec.ExecID = name
+	server.Exec.ResponseSink = server.Shim.HandleResponseMessage
 	server.Verifier = NewVerifier(fmt.Sprintf("%s/verifier", name), execs, name, verifierToExec)
 
 	server.Node.HandleMessage = server.HandleMessage
@@ -111,6 +112,8 @@ func (s *Server) HandleMessage(payload map[string]any) map[string]any {
 	}
 
 	switch msgType {
+	case "response":
+		return s.Exec.HandleResponse(s.Exec, payload)
 	case "batch":
 		return s.Mixer.HandleBatchMessage(payload)
 	case "verify":
