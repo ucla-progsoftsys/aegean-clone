@@ -19,14 +19,14 @@ type pendingResponse struct {
 	outputs []map[string]any
 	state   map[string]string
 	token   string
-	// verifySent indicates whether a verify message has been sent for this seq.
+	// verifySent indicates whether a verify message has been sent for this seq
 	verifySent bool
 }
 
-// ExecuteRequestFunc handles a single request for an exec node.
+// ExecuteRequestFunc handles a single request for an exec node
 type ExecuteRequestFunc func(e *Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any
 
-// ExecuteResponseFunc handles a response message for an exec node.
+// ExecuteResponseFunc handles a response message for an exec node
 type ExecuteResponseFunc func(e *Exec, payload map[string]any) map[string]any
 
 type Exec struct {
@@ -119,13 +119,6 @@ func (e *Exec) ReadKV(key string) string {
 
 func (e *Exec) WriteKV(key, value string) {
 	e.kvStore[key] = value
-}
-
-func (e *Exec) ForwardResponse(payload map[string]any) map[string]any {
-	if e.ResponseSink == nil {
-		return map[string]any{"status": "error", "error": "response sink not configured"}
-	}
-	return e.ResponseSink(payload)
 }
 
 func (e *Exec) HandleBatchMessage(payload map[string]any) map[string]any {

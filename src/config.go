@@ -34,7 +34,7 @@ var config = map[string]NodeConfig{
 		Execs:            []string{"node4", "node5", "node6"},
 		Peers:            []string{"node5", "node6"},
 		IsPrimaryBatcher: true,
-		ExecWorkflow:     "fanout_default",
+		ExecWorkflow:     "fanout",
 		ResponseWorkflow: "forward_to_clients",
 	},
 	"node5": {
@@ -44,7 +44,7 @@ var config = map[string]NodeConfig{
 		Execs:            []string{"node4", "node5", "node6"},
 		Peers:            []string{"node4", "node6"},
 		IsPrimaryBatcher: false,
-		ExecWorkflow:     "fanout_default",
+		ExecWorkflow:     "fanout",
 		ResponseWorkflow: "forward_to_clients",
 	},
 	"node6": {
@@ -54,7 +54,7 @@ var config = map[string]NodeConfig{
 		Execs:            []string{"node4", "node5", "node6"},
 		Peers:            []string{"node4", "node5"},
 		IsPrimaryBatcher: false,
-		ExecWorkflow:     "fanout_default",
+		ExecWorkflow:     "fanout",
 		ResponseWorkflow: "forward_to_clients",
 	},
 	"node7": {
@@ -92,7 +92,7 @@ var config = map[string]NodeConfig{
 func init() {
 	clientWorkflows["default"] = ClientRequestLogic
 	execWorkflows["default"] = ExecuteRequest
-	execWorkflows["fanout_default"] = ExecuteRequestFanoutDefault
+	execWorkflows["fanout"] = ExecuteRequestFanout
 	responseWorkflows["default"] = ResponseForwardToClients
 	responseWorkflows["forward_to_clients"] = ResponseForwardToClients
 	responseWorkflows["noop"] = ResponseNoop
@@ -103,7 +103,6 @@ var execWorkflows = map[string]nodes.ExecuteRequestFunc{}
 var responseWorkflows = map[string]nodes.ExecuteResponseFunc{}
 var responseQuorum = common.NewQuorumHelper(2)
 
-// ClientRequestLogic defines how clients issue requests in this deployment.
 func ClientRequestLogic(c *nodes.Client) {
 	// Wait for other nodes to be turned on. TODO: improvable
 	time.Sleep(2 * time.Second)
@@ -146,7 +145,6 @@ func ClientRequestLogic(c *nodes.Client) {
 	}
 }
 
-// ExecuteRequest defines how exec nodes handle requests in this deployment.
 func ExecuteRequest(e *nodes.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	requestID := request["request_id"]
 	op, _ := request["op"].(string)
@@ -182,8 +180,7 @@ func ExecuteRequest(e *nodes.Exec, request map[string]any, ndSeed int64, ndTimes
 	return response
 }
 
-// ExecuteRequestFanoutDefault runs the default workflow, then forwards the request to nodes 7-9.
-func ExecuteRequestFanoutDefault(e *nodes.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestFanout(e *nodes.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	response := ExecuteRequest(e, request, ndSeed, ndTimestamp)
 
 	fanoutTargets := []string{"node7", "node8", "node9"}
@@ -213,16 +210,27 @@ func ExecuteRequestFanoutDefault(e *nodes.Exec, request map[string]any, ndSeed i
 	return response
 }
 
-// ResponseForwardToClients forwards a response to this server's client list.
 func ResponseForwardToClients(e *nodes.Exec, payload map[string]any) map[string]any {
 	sender, _ := payload["sender"].(string)
 	if !responseQuorum.Add(payload["request_id"], sender) {
 		return map[string]any{"status": "waiting_for_quorum", "request_id": payload["request_id"]}
 	}
-	return e.ForwardResponse(payload)
+	clientResponse := map[string]any{
+		"type":       "response",
+		"request_id": payload["request_id"],
+		"response":   payload["response"],
+		"sender":     sender,
+	}
+
+	clients := []string{"node1", "node2", "node3"}
+	for _, client := range clients {
+		if _, err := common.SendMessage(client, 8000, clientResponse); err != nil {
+			log.Printf("Failed to send response to %s: %v", client, err)
+		}
+	}
+	return map[string]any{"status": "response_broadcast", "recipients": clients}
 }
 
-// ResponseNoop ignores incoming responses.
 func ResponseNoop(_ *nodes.Exec, payload map[string]any) map[string]any {
 	return map[string]any{"status": "ignored_response", "request_id": payload["request_id"]}
 }
