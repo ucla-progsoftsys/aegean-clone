@@ -104,6 +104,7 @@ func (v *Verifier) sendVerifyResponse(seqNum int, decision, token string) {
 
 // TODO: Any of out-of-order issues?
 // TODO: State transfer is unimplemented?
+// TODO: Implement more locking & race condition analysis
 func (v *Verifier) HandleVerifyMessage(payload map[string]any) map[string]any {
 	log.Printf("Handler called on %s with payload: %v", v.Name, payload)
 
@@ -112,10 +113,17 @@ func (v *Verifier) HandleVerifyMessage(payload map[string]any) map[string]any {
 
 	// Buffer if we do not yet have the previous commit hash to validate against
 	if seqNum > 1 && prevHash != "" {
-		if !v.state.HasCommitted(seqNum - 1) {
+		// This lock is to prevent: seq N verify arrives but not added to buffer, seq N - 1 arrives, flushes N - 1 but not N,
+		// seq N added to buffer and never gets flushed
+		v.mu.Lock()
+		committed := v.state.HasCommitted(seqNum - 1)
+		if !committed {
 			v.verifyBuffer.Add(seqNum, payload)
+			log.Printf("Verifier %s: Buffered seq=%d (waiting for commit of seq=%d)", v.Name, seqNum, seqNum-1)
+			v.mu.Unlock()
 			return map[string]any{"status": "buffered", "seq_num": seqNum}
 		}
+		v.mu.Unlock()
 	}
 
 	resp := v.applyVerifyMessage(payload)
@@ -126,17 +134,24 @@ func (v *Verifier) HandleVerifyMessage(payload map[string]any) map[string]any {
 }
 
 func (v *Verifier) flushBufferedFrom(seqNum int) {
+	log.Printf("Verifier %s: Flush buffered from seq=%d", v.Name, seqNum)
 	next := seqNum + 1
 	for {
 		if next > 1 {
-			if !v.state.HasCommitted(next - 1) {
+			v.mu.Lock()
+			committed := v.state.HasCommitted(next - 1)
+			v.mu.Unlock()
+			if !committed {
+				log.Printf("Verifier %s: Flush stopped at seq=%d (missing commit for seq=%d)", v.Name, next, next-1)
 				return
 			}
 		}
 		msgs := v.verifyBuffer.Pop(next)
 		if len(msgs) == 0 {
+			log.Printf("Verifier %s: No buffered messages for seq=%d", v.Name, next)
 			return
 		}
+		log.Printf("Verifier %s: Flushing %d buffered message(s) for seq=%d", v.Name, len(msgs), next)
 		var lastResp map[string]any
 		for _, msg := range msgs {
 			lastResp = v.applyVerifyMessage(msg)
@@ -146,6 +161,7 @@ func (v *Verifier) flushBufferedFrom(seqNum int) {
 		}
 		status, _ := lastResp["status"].(string)
 		if status == "waiting" || status == "invalid_prev_hash" {
+			log.Printf("Verifier %s: Flush halted at seq=%d (status=%s)", v.Name, next, status)
 			return
 		}
 		if status == "committed" || status == "rollback" || status == "already_committed" {
