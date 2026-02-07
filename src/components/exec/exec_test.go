@@ -1,4 +1,4 @@
-package nodes
+package exec
 
 import (
 	"net"
@@ -183,11 +183,11 @@ func TestExecHandleBatchSendsVerifyAndTracksPending(t *testing.T) {
 		t.Fatalf("expected 2 outputs, got %d", len(pending.outputs))
 	}
 
-	expectedToken := exec.computeStateHash(pending.state, pending.outputs, exec.prevHash, 1)
+	expectedToken := exec.computeStateHash(pending.state, pending.outputs, exec.stableState.PrevHash, 1)
 	if pending.token != expectedToken {
 		t.Fatalf("expected pending token %s, got %s", expectedToken, pending.token)
 	}
-	exec.kvStore["mutate"] = "later"
+	exec.workingState.KVStore["mutate"] = "later"
 	if _, ok := pending.state["mutate"]; ok {
 		t.Fatalf("expected pending state to be a snapshot, but it was mutated")
 	}
@@ -229,10 +229,10 @@ func TestExecVerifyCommitStabilizesAndResponds(t *testing.T) {
 		t.Fatalf("expected processed status, got %v", commitResp["status"])
 	}
 
-	if exec.stableSeqNum != 2 {
-		t.Fatalf("expected stableSeqNum 2, got %d", exec.stableSeqNum)
+	if exec.stableState.SeqNum != 2 {
+		t.Fatalf("expected stableSeqNum 2, got %d", exec.stableState.SeqNum)
 	}
-	if exec.prevHash != pending.token {
+	if exec.stableState.PrevHash != pending.token {
 		t.Fatalf("expected prevHash to be committed token")
 	}
 	if exec.forceSequential {
@@ -267,9 +267,9 @@ func TestExecVerifyMismatchTriggersStateTransfer(t *testing.T) {
 	defer ts.close()
 
 	exec, _, _ := newTestExec("exec1", []string{"exec1"}, []string{"127.0.0.1"})
-	exec.stableSeqNum = 1
-	exec.stableState = map[string]string{"x": "1"}
-	exec.kvStore = copyStringMap(exec.stableState)
+	exec.stableState.SeqNum = 1
+	exec.stableState.KVStore = map[string]string{"x": "1"}
+	exec.workingState.KVStore = common.CopyStringMap(exec.stableState.KVStore)
 
 	payload := map[string]any{
 		"type":    "batch",
@@ -290,17 +290,17 @@ func TestExecVerifyMismatchTriggersStateTransfer(t *testing.T) {
 
 	expectMessage(t, ts.received, "state_transfer_request")
 
-	if exec.stableSeqNum != 5 {
-		t.Fatalf("expected stableSeqNum updated to 5, got %d", exec.stableSeqNum)
+	if exec.stableState.SeqNum != 5 {
+		t.Fatalf("expected stableSeqNum updated to 5, got %d", exec.stableState.SeqNum)
 	}
-	if exec.prevHash != "hash-after-transfer" {
+	if exec.stableState.PrevHash != "hash-after-transfer" {
 		t.Fatalf("expected prevHash updated after transfer")
 	}
 	if exec.forceSequential {
 		t.Fatalf("expected forceSequential false after successful state transfer")
 	}
-	if exec.kvStore["a"] != "10" || exec.kvStore["b"] != "20" {
-		t.Fatalf("expected kvStore to match transferred state, got %v", exec.kvStore)
+	if exec.workingState.KVStore["a"] != "10" || exec.workingState.KVStore["b"] != "20" {
+		t.Fatalf("expected kvStore to match transferred state, got %v", exec.workingState.KVStore)
 	}
 }
 
@@ -381,8 +381,8 @@ func TestExecVerifyMismatchFallbackRollback(t *testing.T) {
 	defer ts.close()
 
 	exec, _, _ := newTestExec("exec1", []string{"exec1"}, []string{"127.0.0.1"})
-	exec.stableState = map[string]string{"stable": "yes"}
-	exec.kvStore = map[string]string{"dirty": "no"}
+	exec.stableState.KVStore = map[string]string{"stable": "yes"}
+	exec.workingState.KVStore = map[string]string{"dirty": "no"}
 
 	payload := map[string]any{
 		"type":    "batch",
@@ -403,8 +403,8 @@ func TestExecVerifyMismatchFallbackRollback(t *testing.T) {
 
 	expectMessage(t, ts.received, "state_transfer_request")
 
-	if exec.kvStore["stable"] != "yes" || len(exec.kvStore) != 1 {
-		t.Fatalf("expected rollback to stable state, got %v", exec.kvStore)
+	if exec.workingState.KVStore["stable"] != "yes" || len(exec.workingState.KVStore) != 1 {
+		t.Fatalf("expected rollback to stable state, got %v", exec.workingState.KVStore)
 	}
 	if !exec.forceSequential {
 		t.Fatalf("expected forceSequential true after rollback")
@@ -414,8 +414,8 @@ func TestExecVerifyMismatchFallbackRollback(t *testing.T) {
 // Rollback decision reverts to stable state and forces sequential execution
 func TestExecRollbackDecisionForcesSequential(t *testing.T) {
 	exec, _, _ := newTestExec("exec1", nil, nil)
-	exec.stableState = map[string]string{"stable": "yes"}
-	exec.kvStore = map[string]string{"dirty": "no"}
+	exec.stableState.KVStore = map[string]string{"stable": "yes"}
+	exec.workingState.KVStore = map[string]string{"dirty": "no"}
 	exec.pendingResponses[4] = pendingResponse{
 		outputs: []map[string]any{{"request_id": "r1", "status": "ok"}},
 		state:   map[string]string{"dirty": "no"},
@@ -428,8 +428,8 @@ func TestExecRollbackDecisionForcesSequential(t *testing.T) {
 		"decision": "rollback",
 	})
 
-	if exec.kvStore["stable"] != "yes" || len(exec.kvStore) != 1 {
-		t.Fatalf("expected rollback to stable state, got %v", exec.kvStore)
+	if exec.workingState.KVStore["stable"] != "yes" || len(exec.workingState.KVStore) != 1 {
+		t.Fatalf("expected rollback to stable state, got %v", exec.workingState.KVStore)
 	}
 	if !exec.forceSequential {
 		t.Fatalf("expected forceSequential true after rollback")

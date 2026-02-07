@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"aegean/common"
+	"aegean/components/exec"
 	"aegean/nodes"
 )
 
@@ -99,8 +100,8 @@ func init() {
 }
 
 var clientWorkflows = map[string]func(c *nodes.Client){}
-var execWorkflows = map[string]nodes.ExecuteRequestFunc{}
-var responseWorkflows = map[string]nodes.ExecuteResponseFunc{}
+var execWorkflows = map[string]exec.ExecuteRequestFunc{}
+var responseWorkflows = map[string]exec.ExecuteResponseFunc{}
 var responseQuorum = common.NewQuorumHelper(2)
 
 func ClientRequestLogic(c *nodes.Client) {
@@ -145,7 +146,7 @@ func ClientRequestLogic(c *nodes.Client) {
 	}
 }
 
-func ExecuteRequest(e *nodes.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequest(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	requestID := request["request_id"]
 	op, _ := request["op"].(string)
 	opPayload, _ := request["op_payload"].(map[string]any)
@@ -180,7 +181,7 @@ func ExecuteRequest(e *nodes.Exec, request map[string]any, ndSeed int64, ndTimes
 	return response
 }
 
-func ExecuteRequestFanout(e *nodes.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestFanout(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	response := ExecuteRequest(e, request, ndSeed, ndTimestamp)
 
 	fanoutTargets := []string{"node7", "node8", "node9"}
@@ -210,7 +211,7 @@ func ExecuteRequestFanout(e *nodes.Exec, request map[string]any, ndSeed int64, n
 	return response
 }
 
-func ResponseForwardToClients(e *nodes.Exec, payload map[string]any) map[string]any {
+func ResponseForwardToClients(e *exec.Exec, payload map[string]any) map[string]any {
 	sender, _ := payload["sender"].(string)
 	if !responseQuorum.Add(payload["request_id"], sender) {
 		return map[string]any{"status": "waiting_for_quorum", "request_id": payload["request_id"]}
@@ -231,7 +232,7 @@ func ResponseForwardToClients(e *nodes.Exec, payload map[string]any) map[string]
 	return map[string]any{"status": "response_broadcast", "recipients": clients}
 }
 
-func ResponseNoop(_ *nodes.Exec, payload map[string]any) map[string]any {
+func ResponseNoop(_ *exec.Exec, payload map[string]any) map[string]any {
 	return map[string]any{"status": "ignored_response", "request_id": payload["request_id"]}
 }
 

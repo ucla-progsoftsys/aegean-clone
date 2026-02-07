@@ -114,7 +114,7 @@ func (v *Verifier) sendVerifyResponse(seqNum int, decision, token string) {
 func (v *Verifier) HandleVerifyMessage(payload map[string]any) map[string]any {
 	log.Printf("Handler called on %s with payload: %v", v.Name, payload)
 
-	seqNum := getInt(payload, "seq_num")
+	seqNum := common.GetInt(payload, "seq_num")
 	prevHash, _ := payload["prev_hash"].(string)
 
 	// Buffer if we do not yet have the previous commit hash to validate against
@@ -164,7 +164,7 @@ func (v *Verifier) flushBufferedFrom(seqNum int) {
 }
 
 func (v *Verifier) handleVerifyMessage(payload map[string]any) map[string]any {
-	seqNum := getInt(payload, "seq_num")
+	seqNum := common.GetInt(payload, "seq_num")
 	token, _ := payload["token"].(string)
 	prevHash, _ := payload["prev_hash"].(string)
 	execID, _ := payload["exec_id"].(string)

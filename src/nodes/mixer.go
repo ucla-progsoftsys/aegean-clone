@@ -2,6 +2,8 @@ package nodes
 
 import (
 	"log"
+
+	"aegean/common"
 )
 
 type Mixer struct {
@@ -125,7 +127,7 @@ func (m *Mixer) partitionIntoParallelBatches(batch []map[string]any) [][]map[str
 func (m *Mixer) HandleBatchMessage(payload map[string]any) map[string]any {
 	log.Printf("Handler called on %s with payload: %v", m.Name, payload)
 
-	seqNum := getInt(payload, "seq_num")
+	seqNum := common.GetInt(payload, "seq_num")
 	requests, ok := normalizeRequestSlice(payload["requests"])
 	if !ok {
 		log.Printf("%s: Invalid requests type %T", m.Name, payload["requests"])

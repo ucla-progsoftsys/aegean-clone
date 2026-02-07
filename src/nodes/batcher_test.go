@@ -3,6 +3,8 @@ package nodes
 import (
 	"testing"
 	"time"
+
+	"aegean/common"
 )
 
 func makeReq(id int) map[string]any {
@@ -24,7 +26,7 @@ func TestBatcherFlushOnSize(t *testing.T) {
 		if msg["type"] != "batch" {
 			t.Fatalf("expected batch message, got %v", msg["type"])
 		}
-		if seq := getInt(msg, "seq_num"); seq != 1 {
+		if seq := common.GetInt(msg, "seq_num"); seq != 1 {
 			t.Fatalf("expected seq_num 1, got %d", seq)
 		}
 		reqs, ok := msg["requests"].([]map[string]any)
@@ -51,7 +53,7 @@ func TestBatcherFlushOnTimeout(t *testing.T) {
 
 	select {
 	case msg := <-outCh:
-		if seq := getInt(msg, "seq_num"); seq != 1 {
+		if seq := common.GetInt(msg, "seq_num"); seq != 1 {
 			t.Fatalf("expected seq_num 1, got %d", seq)
 		}
 	case <-time.After(200 * time.Millisecond):
