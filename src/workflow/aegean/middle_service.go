@@ -8,6 +8,8 @@ import (
 	"aegean/components/exec"
 )
 
+const fanoutBaseResponseContextKey = "fanout_base_response"
+
 func ExecuteRequest(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	requestID := request["request_id"]
 	op, _ := request["op"].(string)
@@ -44,17 +46,23 @@ func ExecuteRequest(e *exec.Exec, request map[string]any, ndSeed int64, ndTimest
 }
 
 func ExecuteRequestFanout(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+	requestID := request["request_id"]
 	// First stage: do local work and fan out nested requests asynchronously.
-	if request["__fanout_waiting"] == nil {
+	if _, started := e.GetRequestContextValue(requestID, fanoutBaseResponseContextKey); !started {
 		response := ExecuteRequest(e, request, ndSeed, ndTimestamp)
-		request["__base_response"] = response
-		request["__fanout_waiting"] = true
+		if !e.SetRequestContextValue(requestID, fanoutBaseResponseContextKey, response) {
+			return map[string]any{
+				"status":     "error",
+				"request_id": requestID,
+				"error":      "failed to initialize request continuation context",
+			}
+		}
 
 		fanoutTargets := []string{"node7", "node8", "node9"}
 		for _, target := range fanoutTargets {
 			outgoing := map[string]any{
 				"type":       "request",
-				"request_id": request["request_id"],
+				"request_id": requestID,
 				"timestamp":  request["timestamp"],
 				"sender":     e.Name,
 				"op":         request["op"],
@@ -70,43 +78,46 @@ func ExecuteRequestFanout(e *exec.Exec, request map[string]any, ndSeed int64, nd
 
 		return map[string]any{
 			"status":     "blocked_for_nested_response",
-			"request_id": request["request_id"],
+			"request_id": requestID,
 		}
 	}
 
-	// Continuation stage: once scheduler attaches nested response, return it
-	if nested, ok := request["__nested_response"].(map[string]any); ok && nested != nil {
-		delete(request, "__nested_response")
-		if fanoutDone, output := processNestedFanoutResponse(request, nested); fanoutDone {
-			return output
-		}
+	// Continuation stage: consume next nested response from scheduler-owned queue.
+	nested, ok := e.ConsumeNestedResponse(requestID)
+	if !ok || nested == nil {
 		return map[string]any{
 			"status":     "blocked_for_nested_response",
-			"request_id": request["request_id"],
+			"request_id": requestID,
 		}
+	}
+	if fanoutDone, output := processNestedFanoutResponse(e, requestID, nested); fanoutDone {
+		e.ClearRequestContext(requestID)
+		return output
 	}
 	return map[string]any{
 		"status":     "blocked_for_nested_response",
-		"request_id": request["request_id"],
+		"request_id": requestID,
 	}
 }
 
-func processNestedFanoutResponse(request map[string]any, nested map[string]any) (bool, map[string]any) {
+func processNestedFanoutResponse(e *exec.Exec, requestID any, nested map[string]any) (bool, map[string]any) {
 	if shimAggregated, _ := nested["shim_quorum_aggregated"].(bool); !shimAggregated {
 		return false, nil
 	}
 
 	output := map[string]any{
-		"request_id": request["request_id"],
+		"request_id": requestID,
 		"status":     "ok",
 	}
 	if selectedResponse, ok := nested["response"].(map[string]any); ok {
 		output["response"] = selectedResponse
 	}
-	if base, ok := request["__base_response"].(map[string]any); ok && base != nil {
-		for key, value := range base {
-			if _, exists := output[key]; !exists {
-				output[key] = value
+	if baseAny, ok := e.GetRequestContextValue(requestID, fanoutBaseResponseContextKey); ok && baseAny != nil {
+		if base, ok := baseAny.(map[string]any); ok {
+			for key, value := range base {
+				if _, exists := output[key]; !exists {
+					output[key] = value
+				}
 			}
 		}
 	}

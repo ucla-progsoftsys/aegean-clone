@@ -11,6 +11,7 @@ type execScheduler struct {
 	inflightRequests map[string]*scheduledRequest
 	nestedResponses  map[string][]map[string]any
 	nestedReadyCh    chan struct{}
+	contextStore     *requestContextStore
 }
 
 func newExecScheduler() *execScheduler {
@@ -18,6 +19,7 @@ func newExecScheduler() *execScheduler {
 		inflightRequests: make(map[string]*scheduledRequest),
 		nestedResponses:  make(map[string][]map[string]any),
 		nestedReadyCh:    make(chan struct{}, 1),
+		contextStore:     newRequestContextStore(),
 	}
 }
 
@@ -33,6 +35,28 @@ func (s *execScheduler) enqueueNestedResponse(requestID string, payload map[stri
 	default:
 	}
 	return true
+}
+
+func (s *execScheduler) hasNestedResponse(requestID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.nestedResponses[requestID]) > 0
+}
+
+func (s *execScheduler) popNestedResponse(requestID string) (map[string]any, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	queue := s.nestedResponses[requestID]
+	if len(queue) == 0 {
+		return nil, false
+	}
+	nested := queue[0]
+	if len(queue) == 1 {
+		delete(s.nestedResponses, requestID)
+	} else {
+		s.nestedResponses[requestID] = queue[1:]
+	}
+	return nested, true
 }
 
 func (e *Exec) executeParallelBatch(requests []map[string]any, ndSeed int64, ndTimestamp float64) []map[string]any {
@@ -54,7 +78,7 @@ func (s *execScheduler) executeParallelBatch(e *Exec, requests []map[string]any,
 		})
 	}
 	s.registerScheduledRequests(scheduled)
-	defer s.unregisterScheduledRequests(scheduled)
+	defer s.unregisterScheduledRequests(e, scheduled)
 
 	taskCh := make(chan *scheduledRequest, len(scheduled))
 	resultCh := make(chan workerResult, len(scheduled))
@@ -96,7 +120,7 @@ func (s *execScheduler) executeParallelBatch(e *Exec, requests []map[string]any,
 			case requestFinished, requestExecuting:
 				// Skip; either done or already running.
 			case requestWaiting:
-				if !s.attachNestedResponse(req) {
+				if !s.hasNestedResponse(req.id) {
 					continue
 				}
 				req.state = requestRunnable
@@ -154,27 +178,12 @@ func (s *execScheduler) registerScheduledRequests(requests []*scheduledRequest) 
 	}
 }
 
-func (s *execScheduler) unregisterScheduledRequests(requests []*scheduledRequest) {
+func (s *execScheduler) unregisterScheduledRequests(e *Exec, requests []*scheduledRequest) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, req := range requests {
 		delete(s.inflightRequests, req.id)
 		delete(s.nestedResponses, req.id)
+		s.contextStore.clearByID(req.id)
 	}
-}
-
-func (s *execScheduler) attachNestedResponse(req *scheduledRequest) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	queue := s.nestedResponses[req.id]
-	if len(queue) == 0 {
-		return false
-	}
-	req.payload["__nested_response"] = queue[0]
-	if len(queue) == 1 {
-		delete(s.nestedResponses, req.id)
-	} else {
-		s.nestedResponses[req.id] = queue[1:]
-	}
-	return true
 }

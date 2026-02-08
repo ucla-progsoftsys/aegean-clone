@@ -1,0 +1,68 @@
+package exec
+
+import "sync"
+
+type requestContextStore struct {
+	mu       sync.Mutex
+	contexts map[string]map[string]any
+}
+
+func newRequestContextStore() *requestContextStore {
+	return &requestContextStore{
+		contexts: make(map[string]map[string]any),
+	}
+}
+
+func (e *Exec) SetRequestContextValue(requestID any, key string, value any) bool {
+	canonicalID, ok := canonicalRequestID(requestID)
+	if !ok {
+		return false
+	}
+	e.scheduler.contextStore.set(canonicalID, key, value)
+	return true
+}
+
+func (e *Exec) GetRequestContextValue(requestID any, key string) (any, bool) {
+	canonicalID, ok := canonicalRequestID(requestID)
+	if !ok {
+		return nil, false
+	}
+	return e.scheduler.contextStore.get(canonicalID, key)
+}
+
+func (e *Exec) ClearRequestContext(requestID any) {
+	canonicalID, ok := canonicalRequestID(requestID)
+	if !ok {
+		return
+	}
+	e.scheduler.contextStore.clearByID(canonicalID)
+}
+
+func (s *requestContextStore) set(requestID string, key string, value any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.contexts[requestID]; !exists {
+		s.contexts[requestID] = make(map[string]any)
+	}
+	s.contexts[requestID][key] = value
+}
+
+func (s *requestContextStore) get(requestID string, key string) (any, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ctx, exists := s.contexts[requestID]
+	if !exists {
+		return nil, false
+	}
+	value, exists := ctx[key]
+	if !exists {
+		return nil, false
+	}
+	return value, true
+}
+
+func (s *requestContextStore) clearByID(requestID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.contexts, requestID)
+}

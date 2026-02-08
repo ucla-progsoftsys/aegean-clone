@@ -461,9 +461,10 @@ func TestComputeStateHashDeterministicOrdering(t *testing.T) {
 func TestExecBlockedRequestResumesAfterNestedResponse(t *testing.T) {
 	verifierCh := make(chan map[string]any, 8)
 	shimCh := make(chan map[string]any, 8)
-	exec := NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh,
+	var exec *Exec
+	exec = NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh,
 		func(_ *Exec, request map[string]any, _ int64, _ float64) map[string]any {
-			if nested, ok := request["__nested_response"].(map[string]any); ok && nested != nil {
+			if nested, ok := exec.ConsumeNestedResponse(request["request_id"]); ok && nested != nil {
 				return map[string]any{
 					"request_id": request["request_id"],
 					"status":     "ok",
