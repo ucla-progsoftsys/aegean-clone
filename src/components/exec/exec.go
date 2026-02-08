@@ -44,21 +44,21 @@ type Exec struct {
 	nextVerifySeq int
 	// Request execution hook
 	ExecuteRequest ExecuteRequestFunc
-	// Response handling hook
-	HandleResponse ExecuteResponseFunc
+	// Nested response handling hook
+	HandleNestedResponse ExecuteResponseFunc
 }
 
 // TODO: request pipelining, parallel pipelining
 // TODO: implement locking
-func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- map[string]any, shimCh chan<- map[string]any, executeRequest ExecuteRequestFunc, handleResponse ExecuteResponseFunc) *Exec {
+func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- map[string]any, shimCh chan<- map[string]any, executeRequest ExecuteRequestFunc, handleNestedResponse ExecuteResponseFunc) *Exec {
 	if verifierCh == nil || shimCh == nil {
 		log.Fatalf("exec component requires non-nil channels")
 	}
 	if executeRequest == nil {
 		log.Fatalf("exec component requires ExecuteRequest")
 	}
-	if handleResponse == nil {
-		log.Fatalf("exec component requires HandleResponse")
+	if handleNestedResponse == nil {
+		log.Fatalf("exec component requires HandleNestedResponse")
 	}
 	initialKV := map[string]string{"1": "111"}
 	stable := State{
@@ -74,20 +74,20 @@ func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- 
 		Verified: false,
 	}
 	exec := &Exec{
-		Name:             name,
-		Verifiers:        verifiers,
-		Peers:            peers,
-		VerifierCh:       verifierCh,
-		ShimCh:           shimCh,
-		ExecuteRequest:   executeRequest,
-		HandleResponse:   handleResponse,
-		stableState:      stable,
-		workingState:     working,
-		pendingResponses: make(map[int]pendingResponse),
-		batchBuffer:      common.NewOOOBuffer[map[string]any](),
-		verifyBuffer:     common.NewOOOBuffer[map[string]any](),
-		nextBatchSeq:     1,
-		nextVerifySeq:    1,
+		Name:                 name,
+		Verifiers:            verifiers,
+		Peers:                peers,
+		VerifierCh:           verifierCh,
+		ShimCh:               shimCh,
+		ExecuteRequest:       executeRequest,
+		HandleNestedResponse: handleNestedResponse,
+		stableState:          stable,
+		workingState:         working,
+		pendingResponses:     make(map[int]pendingResponse),
+		batchBuffer:          common.NewOOOBuffer[map[string]any](),
+		verifyBuffer:         common.NewOOOBuffer[map[string]any](),
+		nextBatchSeq:         1,
+		nextVerifySeq:        1,
 	}
 	return exec
 }

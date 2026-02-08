@@ -35,7 +35,7 @@ func (s *Shim) HandleRequestMessage(payload map[string]any) map[string]any {
 	}
 
 	if msgType == "response" {
-		return s.HandleResponseMessage(payload)
+		return s.HandleOutgoingResponse(payload)
 	}
 
 	// Handle incoming client request - wait for quorum then forward
@@ -53,7 +53,7 @@ func (s *Shim) HandleRequestMessage(payload map[string]any) map[string]any {
 	return map[string]any{"status": "waiting_for_quorum"}
 }
 
-func (s *Shim) HandleResponseMessage(payload map[string]any) map[string]any {
+func (s *Shim) HandleOutgoingResponse(payload map[string]any) map[string]any {
 	requestID := payload["request_id"]
 	responseData, _ := payload["response"].(map[string]any)
 	sender := s.Name

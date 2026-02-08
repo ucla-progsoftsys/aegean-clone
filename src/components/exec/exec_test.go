@@ -92,7 +92,7 @@ func makeParallelBatches(requests ...map[string]any) [][]map[string]any {
 func newTestExec(name string, verifiers []string, peers []string) (*Exec, chan map[string]any, chan map[string]any) {
 	verifierCh := make(chan map[string]any, 64)
 	shimCh := make(chan map[string]any, 64)
-	exec := NewExec(name, verifiers, peers, verifierCh, shimCh, testExecuteRequest, testHandleResponse)
+	exec := NewExec(name, verifiers, peers, verifierCh, shimCh, testExecuteRequest, testHandleNestedResponse)
 	return exec, verifierCh, shimCh
 }
 
@@ -127,7 +127,7 @@ func testExecuteRequest(e *Exec, request map[string]any, ndSeed int64, ndTimesta
 	return response
 }
 
-func testHandleResponse(_ *Exec, payload map[string]any) map[string]any {
+func testHandleNestedResponse(_ *Exec, payload map[string]any) map[string]any {
 	return map[string]any{"status": "ok", "request_id": payload["request_id"]}
 }
 

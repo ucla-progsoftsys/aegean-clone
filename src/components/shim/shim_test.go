@@ -151,7 +151,7 @@ func TestShimBroadcastsResponseToClients(t *testing.T) {
 	nextCh := make(chan map[string]any, 16)
 	shim := NewShim("shim", nextCh, []string{"127.0.0.1", "127.0.0.1"})
 
-	resp := shim.HandleResponseMessage(map[string]any{
+	resp := shim.HandleOutgoingResponse(map[string]any{
 		"type":       "response",
 		"request_id": "r3",
 		"response":   map[string]any{"status": "ok"},
