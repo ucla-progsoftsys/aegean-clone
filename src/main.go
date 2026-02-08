@@ -56,15 +56,7 @@ func main() {
 		if execFn == nil {
 			log.Fatalf("unknown exec workflow %q for node %s", execWorkflow, *name)
 		}
-		responseWorkflow := cfg.ResponseWorkflow
-		if responseWorkflow == "" {
-			responseWorkflow = "default"
-		}
-		responseFn := workflow.ResponseWorkflows[responseWorkflow]
-		if responseFn == nil {
-			log.Fatalf("unknown response workflow %q for node %s", responseWorkflow, *name)
-		}
-		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Verifiers, cfg.Peers, cfg.Execs, cfg.IsPrimaryBatcher, execFn, responseFn)
+		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Verifiers, cfg.Peers, cfg.Execs, cfg.IsPrimaryBatcher, execFn)
 	default:
 		log.Fatalf("unrecognized node type: %s", cfg.Type)
 	}

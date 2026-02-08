@@ -79,8 +79,8 @@ func expectNoShimMessage(t *testing.T, ch <-chan map[string]any, wait time.Durat
 
 // Forwards a client request only after quorum of senders is reached
 func TestShimForwardsOnQuorum(t *testing.T) {
-	nextCh := make(chan map[string]any, 16)
-	shim := NewShim("shim", nextCh, nil)
+	batcherCh := make(chan map[string]any, 16)
+	shim := NewShim("shim", batcherCh, nil, nil)
 
 	first := shim.HandleRequestMessage(map[string]any{
 		"type":       "request",
@@ -90,7 +90,7 @@ func TestShimForwardsOnQuorum(t *testing.T) {
 	if first["status"] != "waiting_for_quorum" {
 		t.Fatalf("expected waiting_for_quorum, got %v", first["status"])
 	}
-	expectNoShimMessage(t, nextCh, 100*time.Millisecond)
+	expectNoShimMessage(t, batcherCh, 100*time.Millisecond)
 
 	second := shim.HandleRequestMessage(map[string]any{
 		"type":       "request",
@@ -101,7 +101,7 @@ func TestShimForwardsOnQuorum(t *testing.T) {
 		t.Fatalf("expected forwarded_to_mid_execs, got %v", second["status"])
 	}
 
-	msg := expectShimMessage(t, nextCh, "")
+	msg := expectShimMessage(t, batcherCh, "")
 	if msg["request_id"] != "r1" {
 		t.Fatalf("expected forwarded request_id r1, got %v", msg["request_id"])
 	}
@@ -109,8 +109,8 @@ func TestShimForwardsOnQuorum(t *testing.T) {
 
 // Duplicate senders do not advance quorum
 func TestShimIgnoresDuplicateSenderUntilQuorum(t *testing.T) {
-	nextCh := make(chan map[string]any, 16)
-	shim := NewShim("shim", nextCh, nil)
+	batcherCh := make(chan map[string]any, 16)
+	shim := NewShim("shim", batcherCh, nil, nil)
 
 	first := shim.HandleRequestMessage(map[string]any{
 		"type":       "request",
@@ -129,7 +129,7 @@ func TestShimIgnoresDuplicateSenderUntilQuorum(t *testing.T) {
 	if second["status"] != "waiting_for_quorum" {
 		t.Fatalf("expected waiting_for_quorum for duplicate, got %v", second["status"])
 	}
-	expectNoShimMessage(t, nextCh, 100*time.Millisecond)
+	expectNoShimMessage(t, batcherCh, 100*time.Millisecond)
 
 	third := shim.HandleRequestMessage(map[string]any{
 		"type":       "request",
@@ -140,7 +140,7 @@ func TestShimIgnoresDuplicateSenderUntilQuorum(t *testing.T) {
 		t.Fatalf("expected forwarded_to_mid_execs, got %v", third["status"])
 	}
 
-	expectShimMessage(t, nextCh, "request")
+	expectShimMessage(t, batcherCh, "request")
 }
 
 // Response from exec is broadcast to all configured clients
@@ -148,8 +148,8 @@ func TestShimBroadcastsResponseToClients(t *testing.T) {
 	ts := startShimTestServer(t)
 	defer ts.close()
 
-	nextCh := make(chan map[string]any, 16)
-	shim := NewShim("shim", nextCh, []string{"127.0.0.1", "127.0.0.1"})
+	batcherCh := make(chan map[string]any, 16)
+	shim := NewShim("shim", batcherCh, nil, []string{"127.0.0.1", "127.0.0.1"})
 
 	resp := shim.HandleOutgoingResponse(map[string]any{
 		"type":       "response",
@@ -169,8 +169,8 @@ func TestShimBroadcastsResponseToClients(t *testing.T) {
 
 // Missing type defaults to a client request and follows quorum forwarding
 func TestShimDefaultsToRequestType(t *testing.T) {
-	nextCh := make(chan map[string]any, 16)
-	shim := NewShim("shim", nextCh, nil)
+	batcherCh := make(chan map[string]any, 16)
+	shim := NewShim("shim", batcherCh, nil, nil)
 
 	shim.HandleRequestMessage(map[string]any{
 		"request_id": "r4",
@@ -181,7 +181,7 @@ func TestShimDefaultsToRequestType(t *testing.T) {
 		"sender":     "clientB",
 	})
 
-	msg := expectShimMessage(t, nextCh, "")
+	msg := expectShimMessage(t, batcherCh, "")
 	if msg["request_id"] != "r4" {
 		t.Fatalf("expected forwarded request_id r4, got %v", msg["request_id"])
 	}
@@ -192,8 +192,8 @@ func TestShimDefaultsToRequestType(t *testing.T) {
 
 // Different request IDs maintain independent quorums
 func TestShimIndependentQuorumsPerRequestID(t *testing.T) {
-	nextCh := make(chan map[string]any, 16)
-	shim := NewShim("shim", nextCh, nil)
+	batcherCh := make(chan map[string]any, 16)
+	shim := NewShim("shim", batcherCh, nil, nil)
 
 	shim.HandleRequestMessage(map[string]any{
 		"type":       "request",
@@ -206,14 +206,14 @@ func TestShimIndependentQuorumsPerRequestID(t *testing.T) {
 		"sender":     "clientA",
 	})
 
-	expectNoShimMessage(t, nextCh, 100*time.Millisecond)
+	expectNoShimMessage(t, batcherCh, 100*time.Millisecond)
 
 	shim.HandleRequestMessage(map[string]any{
 		"type":       "request",
 		"request_id": "r6",
 		"sender":     "clientB",
 	})
-	msg := expectShimMessage(t, nextCh, "request")
+	msg := expectShimMessage(t, batcherCh, "request")
 	if msg["request_id"] != "r6" {
 		t.Fatalf("expected forwarded request_id r6, got %v", msg["request_id"])
 	}
@@ -223,7 +223,7 @@ func TestShimIndependentQuorumsPerRequestID(t *testing.T) {
 		"request_id": "r5",
 		"sender":     "clientB",
 	})
-	msg2 := expectShimMessage(t, nextCh, "request")
+	msg2 := expectShimMessage(t, batcherCh, "request")
 	if msg2["request_id"] != "r5" {
 		t.Fatalf("expected forwarded request_id r5, got %v", msg2["request_id"])
 	}
@@ -231,8 +231,8 @@ func TestShimIndependentQuorumsPerRequestID(t *testing.T) {
 
 // Interleaved senders across requests still forward each at quorum
 func TestShimInterleavedSendersAcrossRequests(t *testing.T) {
-	nextCh := make(chan map[string]any, 16)
-	shim := NewShim("shim", nextCh, nil)
+	batcherCh := make(chan map[string]any, 16)
+	shim := NewShim("shim", batcherCh, nil, nil)
 
 	shim.HandleRequestMessage(map[string]any{
 		"type":       "request",
@@ -250,7 +250,7 @@ func TestShimInterleavedSendersAcrossRequests(t *testing.T) {
 		"sender":     "clientB",
 	})
 
-	msg := expectShimMessage(t, nextCh, "request")
+	msg := expectShimMessage(t, batcherCh, "request")
 	if msg["request_id"] != "r7" {
 		t.Fatalf("expected forwarded request_id r7, got %v", msg["request_id"])
 	}
@@ -260,8 +260,43 @@ func TestShimInterleavedSendersAcrossRequests(t *testing.T) {
 		"request_id": "r8",
 		"sender":     "clientB",
 	})
-	msg2 := expectShimMessage(t, nextCh, "request")
+	msg2 := expectShimMessage(t, batcherCh, "request")
 	if msg2["request_id"] != "r8" {
 		t.Fatalf("expected forwarded request_id r8, got %v", msg2["request_id"])
+	}
+}
+
+// Incoming nested responses are quorum-gated in shim before forwarding to exec.
+func TestShimForwardsNestedResponseAfterQuorum(t *testing.T) {
+	batcherCh := make(chan map[string]any, 16)
+	execCh := make(chan map[string]any, 16)
+	shim := NewShim("shim", batcherCh, execCh, nil)
+
+	first := shim.HandleIncomingResponse(map[string]any{
+		"type":       "response",
+		"request_id": "r9",
+		"sender":     "node7",
+		"response":   map[string]any{"status": "ok", "value": "a"},
+	})
+	if first["status"] != "waiting_for_quorum" {
+		t.Fatalf("expected waiting_for_quorum, got %v", first["status"])
+	}
+	expectNoShimMessage(t, execCh, 100*time.Millisecond)
+
+	second := shim.HandleIncomingResponse(map[string]any{
+		"type":       "response",
+		"request_id": "r9",
+		"sender":     "node8",
+		"response":   map[string]any{"status": "ok", "value": "a"},
+	})
+	if second["status"] != "forwarded_nested_response" {
+		t.Fatalf("expected forwarded_nested_response, got %v", second["status"])
+	}
+	forwarded := expectShimMessage(t, execCh, "response")
+	if forwarded["request_id"] != "r9" {
+		t.Fatalf("expected forwarded request_id r9, got %v", forwarded["request_id"])
+	}
+	if got, _ := forwarded["shim_quorum_aggregated"].(bool); !got {
+		t.Fatalf("expected shim_quorum_aggregated=true")
 	}
 }

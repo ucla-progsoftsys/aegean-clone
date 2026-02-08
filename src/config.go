@@ -17,7 +17,6 @@ type NodeConfig struct {
 	IsPrimaryBatcher bool     `json:"is_primary_batcher"`
 	ExecWorkflow     string   `json:"exec_workflow"`
 	ClientWorkflow   string   `json:"client_workflow"`
-	ResponseWorkflow string   `json:"response_workflow"`
 }
 
 const configPath = "../experiment/architecture/aegean.json"

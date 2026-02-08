@@ -16,11 +16,8 @@ type pendingResponse struct {
 	verifySent bool
 }
 
-// ExecuteRequestFunc handles a single request for an exec node
-// ExecuteResponseFunc handles a response message for an exec node
-// ResponseSink forwards responses (e.g. to a shim).
+// ExecuteRequestFunc handles a single request for an exec node.
 type ExecuteRequestFunc func(e *Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any
-type ExecuteResponseFunc func(e *Exec, payload map[string]any) map[string]any
 
 type Exec struct {
 	Name      string
@@ -30,6 +27,7 @@ type Exec struct {
 	VerifierCh chan<- map[string]any
 	ShimCh     chan<- map[string]any
 	mu         sync.Mutex
+	stateMu    sync.RWMutex
 	// State management for rollback
 	stableState  State
 	workingState State
@@ -42,23 +40,20 @@ type Exec struct {
 	verifyBuffer  *common.OOOBuffer[map[string]any]
 	nextBatchSeq  int
 	nextVerifySeq int
+	workerCount   int
+	scheduler     *execScheduler
 	// Request execution hook
 	ExecuteRequest ExecuteRequestFunc
-	// Nested response handling hook
-	HandleNestedResponse ExecuteResponseFunc
 }
 
 // TODO: request pipelining, parallel pipelining
 // TODO: implement locking
-func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- map[string]any, shimCh chan<- map[string]any, executeRequest ExecuteRequestFunc, handleNestedResponse ExecuteResponseFunc) *Exec {
+func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- map[string]any, shimCh chan<- map[string]any, executeRequest ExecuteRequestFunc) *Exec {
 	if verifierCh == nil || shimCh == nil {
 		log.Fatalf("exec component requires non-nil channels")
 	}
 	if executeRequest == nil {
 		log.Fatalf("exec component requires ExecuteRequest")
-	}
-	if handleNestedResponse == nil {
-		log.Fatalf("exec component requires HandleNestedResponse")
 	}
 	initialKV := map[string]string{"1": "111"}
 	stable := State{
@@ -74,30 +69,50 @@ func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- 
 		Verified: false,
 	}
 	exec := &Exec{
-		Name:                 name,
-		Verifiers:            verifiers,
-		Peers:                peers,
-		VerifierCh:           verifierCh,
-		ShimCh:               shimCh,
-		ExecuteRequest:       executeRequest,
-		HandleNestedResponse: handleNestedResponse,
-		stableState:          stable,
-		workingState:         working,
-		pendingResponses:     make(map[int]pendingResponse),
-		batchBuffer:          common.NewOOOBuffer[map[string]any](),
-		verifyBuffer:         common.NewOOOBuffer[map[string]any](),
-		nextBatchSeq:         1,
-		nextVerifySeq:        1,
+		Name:             name,
+		Verifiers:        verifiers,
+		Peers:            peers,
+		VerifierCh:       verifierCh,
+		ShimCh:           shimCh,
+		ExecuteRequest:   executeRequest,
+		stableState:      stable,
+		workingState:     working,
+		pendingResponses: make(map[int]pendingResponse),
+		batchBuffer:      common.NewOOOBuffer[map[string]any](),
+		verifyBuffer:     common.NewOOOBuffer[map[string]any](),
+		nextBatchSeq:     1,
+		nextVerifySeq:    1,
+		workerCount:      4,
 	}
+	exec.scheduler = newExecScheduler()
 	return exec
 }
 
 func (e *Exec) ReadKV(key string) string {
+	e.stateMu.RLock()
+	defer e.stateMu.RUnlock()
 	return e.workingState.KVStore[key]
 }
 
 func (e *Exec) WriteKV(key, value string) {
+	e.stateMu.Lock()
+	defer e.stateMu.Unlock()
 	e.workingState.KVStore[key] = value
+}
+
+func (e *Exec) BufferNestedResponse(payload map[string]any) bool {
+	if payload == nil {
+		return false
+	}
+	requestIDRaw, ok := payload["request_id"]
+	if !ok || requestIDRaw == nil {
+		return false
+	}
+	requestID, ok := canonicalRequestID(requestIDRaw)
+	if !ok {
+		return false
+	}
+	return e.scheduler.enqueueNestedResponse(requestID, payload)
 }
 
 func (e *Exec) HandleBatchMessage(payload map[string]any) map[string]any {

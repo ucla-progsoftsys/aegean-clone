@@ -92,7 +92,7 @@ func makeParallelBatches(requests ...map[string]any) [][]map[string]any {
 func newTestExec(name string, verifiers []string, peers []string) (*Exec, chan map[string]any, chan map[string]any) {
 	verifierCh := make(chan map[string]any, 64)
 	shimCh := make(chan map[string]any, 64)
-	exec := NewExec(name, verifiers, peers, verifierCh, shimCh, testExecuteRequest, testHandleNestedResponse)
+	exec := NewExec(name, verifiers, peers, verifierCh, shimCh, testExecuteRequest)
 	return exec, verifierCh, shimCh
 }
 
@@ -125,10 +125,6 @@ func testExecuteRequest(e *Exec, request map[string]any, ndSeed int64, ndTimesta
 	_ = ndSeed
 	_ = ndTimestamp
 	return response
-}
-
-func testHandleNestedResponse(_ *Exec, payload map[string]any) map[string]any {
-	return map[string]any{"status": "ok", "request_id": payload["request_id"]}
 }
 
 func getStringTest(m map[string]any, key string) string {
@@ -459,5 +455,61 @@ func TestComputeStateHashDeterministicOrdering(t *testing.T) {
 
 	if hashA != hashB {
 		t.Fatalf("expected deterministic hash, got %s and %s", hashA, hashB)
+	}
+}
+
+func TestExecBlockedRequestResumesAfterNestedResponse(t *testing.T) {
+	verifierCh := make(chan map[string]any, 8)
+	shimCh := make(chan map[string]any, 8)
+	exec := NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh,
+		func(_ *Exec, request map[string]any, _ int64, _ float64) map[string]any {
+			if nested, ok := request["__nested_response"].(map[string]any); ok && nested != nil {
+				return map[string]any{
+					"request_id": request["request_id"],
+					"status":     "ok",
+					"nested":     nested["status"],
+				}
+			}
+			return map[string]any{
+				"request_id": request["request_id"],
+				"status":     "blocked_for_nested_response",
+			}
+		},
+	)
+
+	done := make(chan map[string]any, 1)
+	go func() {
+		done <- exec.handleBatch(map[string]any{
+			"type":    "batch",
+			"seq_num": 1,
+			"parallel_batches": makeParallelBatches(
+				map[string]any{"request_id": "r1", "op": "block"},
+			),
+		})
+	}()
+
+	time.Sleep(25 * time.Millisecond)
+	if !exec.BufferNestedResponse(map[string]any{"request_id": "r1", "status": "ready"}) {
+		t.Fatalf("expected nested response to be accepted for in-flight request")
+	}
+
+	select {
+	case resp := <-done:
+		if resp["status"] != "executed" {
+			t.Fatalf("expected handleBatch to finish execution, got %v", resp["status"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for blocked request to resume")
+	}
+
+	pending, ok := exec.pendingResponses[1]
+	if !ok {
+		t.Fatalf("expected pending response for seq 1")
+	}
+	if len(pending.outputs) != 1 {
+		t.Fatalf("expected one output, got %d", len(pending.outputs))
+	}
+	if pending.outputs[0]["status"] != "ok" {
+		t.Fatalf("expected resumed output status ok, got %v", pending.outputs[0]["status"])
 	}
 }

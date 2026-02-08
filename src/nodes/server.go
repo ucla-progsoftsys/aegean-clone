@@ -22,16 +22,18 @@ type Server struct {
 	shimToBatcher  chan map[string]any
 	batcherToMixer chan map[string]any
 	mixerToExec    chan map[string]any
+	shimToExec     chan map[string]any
 	execToVerifier chan map[string]any
 	verifierToExec chan map[string]any
 	execToShim     chan map[string]any
 }
 
-func NewServer(name, host string, port int, clients []string, verifiers []string, peers []string, execs []string, isPrimaryBatcher bool, executeRequest exec.ExecuteRequestFunc, nestedResponseHandler exec.ExecuteResponseFunc) *Server {
+func NewServer(name, host string, port int, clients []string, verifiers []string, peers []string, execs []string, isPrimaryBatcher bool, executeRequest exec.ExecuteRequestFunc) *Server {
 	// Buffered channels to decouple component work
 	shimToBatcher := make(chan map[string]any, 256)
 	batcherToMixer := make(chan map[string]any, 256)
 	mixerToExec := make(chan map[string]any, 256)
+	shimToExec := make(chan map[string]any, 256)
 	execToVerifier := make(chan map[string]any, 256)
 	verifierToExec := make(chan map[string]any, 256)
 	execToShim := make(chan map[string]any, 256)
@@ -41,6 +43,7 @@ func NewServer(name, host string, port int, clients []string, verifiers []string
 		shimToBatcher:    shimToBatcher,
 		batcherToMixer:   batcherToMixer,
 		mixerToExec:      mixerToExec,
+		shimToExec:       shimToExec,
 		execToVerifier:   execToVerifier,
 		verifierToExec:   verifierToExec,
 		execToShim:       execToShim,
@@ -48,10 +51,10 @@ func NewServer(name, host string, port int, clients []string, verifiers []string
 	}
 
 	// Init each component
-	server.Shim = shim.NewShim(name, shimToBatcher, clients)
+	server.Shim = shim.NewShim(name, shimToBatcher, shimToExec, clients)
 	server.Batcher = batcher.NewBatcher(name, batcherToMixer, execs, isPrimaryBatcher)
 	server.Mixer = mixer.NewMixer(name, mixerToExec)
-	server.Exec = exec.NewExec(name, verifiers, peers, execToVerifier, execToShim, executeRequest, nestedResponseHandler)
+	server.Exec = exec.NewExec(name, verifiers, peers, execToVerifier, execToShim, executeRequest)
 	server.Verifier = verifier.NewVerifier(name, execs, verifierToExec)
 
 	server.Node.HandleMessage = server.HandleMessage
@@ -79,6 +82,12 @@ func (s *Server) Start() {
 	go func() {
 		for msg := range s.mixerToExec {
 			s.Exec.HandleBatchMessage(msg)
+		}
+	}()
+
+	go func() {
+		for msg := range s.shimToExec {
+			_ = s.Exec.BufferNestedResponse(msg)
 		}
 	}()
 
@@ -115,7 +124,7 @@ func (s *Server) HandleMessage(payload map[string]any) map[string]any {
 
 	switch msgType {
 	case "response":
-		return s.Exec.HandleNestedResponse(s.Exec, payload)
+		return s.Shim.HandleIncomingResponse(payload)
 	case "batch":
 		return s.Mixer.HandleBatchMessage(payload)
 	case "verify":

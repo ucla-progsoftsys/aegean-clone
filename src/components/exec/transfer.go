@@ -51,7 +51,9 @@ func (e *Exec) requestStateTransfer() bool {
 			converted[key] = fmt.Sprintf("%v", value)
 		}
 
+		e.stateMu.Lock()
 		e.workingState.KVStore = common.CopyStringMap(converted)
+		e.stateMu.Unlock()
 		e.stableState = State{
 			KVStore:  common.CopyStringMap(converted),
 			SeqNum:   transferredStableSeqNum,
@@ -82,10 +84,13 @@ func (e *Exec) requestStateTransfer() bool {
 func (e *Exec) handleStateTransferRequest(payload map[string]any) map[string]any {
 	requestingExec, _ := payload["requesting_exec"].(string)
 	log.Printf("%s: Received state transfer request from %s, providing stable state at seq_num %d", e.Name, requestingExec, e.stableState.SeqNum)
+	e.stateMu.RLock()
+	stableCopy := common.CopyStringMap(e.stableState.KVStore)
+	e.stateMu.RUnlock()
 
 	return map[string]any{
 		"status":         "ok",
-		"state":          common.CopyStringMap(e.stableState.KVStore),
+		"state":          stableCopy,
 		"stable_seq_num": e.stableState.SeqNum,
 		"prev_hash":      e.stableState.PrevHash,
 	}

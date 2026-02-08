@@ -37,20 +37,19 @@ func (e *Exec) handleBatch(payload map[string]any) map[string]any {
 
 	// Execute all parallelBatches and collect outputs
 	outputs := make([]map[string]any, 0)
-	for _, pbAny := range parallelBatches {
-		for _, reqMap := range pbAny {
-			// TODO: In prototype, execute sequentially within parallelBatch
-			// (Real impl would use threading for parallel execution)
-			output := e.ExecuteRequest(e, reqMap, ndSeed, ndTimestamp)
-			outputs = append(outputs, output)
-		}
+	for _, pb := range parallelBatches {
+		pbOutputs := e.executeParallelBatch(pb, ndSeed, ndTimestamp)
+		outputs = append(outputs, pbOutputs...)
 	}
 
-	// TODO: check that all requests in the batch are finished before verification phase
+	e.stateMu.RLock()
+	stateSnapshot := common.CopyStringMap(e.workingState.KVStore)
+	e.stateMu.RUnlock()
+
 	e.mu.Lock()
 	e.pendingResponses[seqNum] = pendingResponse{
 		outputs: outputs,
-		state:   common.CopyStringMap(e.workingState.KVStore),
+		state:   stateSnapshot,
 		token:   "",
 	}
 	e.mu.Unlock()

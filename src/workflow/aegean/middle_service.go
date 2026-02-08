@@ -8,8 +8,6 @@ import (
 	"aegean/components/exec"
 )
 
-var responseQuorum = common.NewQuorumHelper(2)
-
 func ExecuteRequest(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	requestID := request["request_id"]
 	op, _ := request["op"].(string)
@@ -46,50 +44,71 @@ func ExecuteRequest(e *exec.Exec, request map[string]any, ndSeed int64, ndTimest
 }
 
 func ExecuteRequestFanout(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
-	response := ExecuteRequest(e, request, ndSeed, ndTimestamp)
+	// First stage: do local work and fan out nested requests asynchronously.
+	if request["__fanout_waiting"] == nil {
+		response := ExecuteRequest(e, request, ndSeed, ndTimestamp)
+		request["__base_response"] = response
+		request["__fanout_waiting"] = true
 
-	fanoutTargets := []string{"node7", "node8", "node9"}
-	var fanoutResponse map[string]any
-	for _, target := range fanoutTargets {
-		outgoing := map[string]any{
-			"type":       "request",
+		fanoutTargets := []string{"node7", "node8", "node9"}
+		for _, target := range fanoutTargets {
+			outgoing := map[string]any{
+				"type":       "request",
+				"request_id": request["request_id"],
+				"timestamp":  request["timestamp"],
+				"sender":     e.Name,
+				"op":         request["op"],
+				"op_payload": request["op_payload"],
+			}
+			go func(target string, outgoing map[string]any) {
+				_, err := common.SendMessage(target, 8000, outgoing)
+				if err != nil {
+					log.Printf("Fanout from %s to %s failed: %v", e.Name, target, err)
+				}
+			}(target, outgoing)
+		}
+
+		return map[string]any{
+			"status":     "blocked_for_nested_response",
 			"request_id": request["request_id"],
-			"timestamp":  request["timestamp"],
-			"sender":     e.Name,
-			"op":         request["op"],
-			"op_payload": request["op_payload"],
-		}
-		resp, err := common.SendMessage(target, 8000, outgoing)
-		if err != nil {
-			log.Printf("Fanout from %s to %s failed: %v", e.Name, target, err)
-			continue
-		}
-		if fanoutResponse == nil {
-			fanoutResponse = resp
 		}
 	}
 
-	if fanoutResponse != nil {
-		return fanoutResponse
+	// Continuation stage: once scheduler attaches nested response, return it
+	if nested, ok := request["__nested_response"].(map[string]any); ok && nested != nil {
+		delete(request, "__nested_response")
+		if fanoutDone, output := processNestedFanoutResponse(request, nested); fanoutDone {
+			return output
+		}
+		return map[string]any{
+			"status":     "blocked_for_nested_response",
+			"request_id": request["request_id"],
+		}
 	}
-	// TODO: This will incorrectly cause shim's ACK messages to be treated as responses by the client
-	// Probably fix this when we introduce request-pipelining
-	return response
+	return map[string]any{
+		"status":     "blocked_for_nested_response",
+		"request_id": request["request_id"],
+	}
 }
 
-func ResponseForwardToClients(e *exec.Exec, payload map[string]any) map[string]any {
-	sender, _ := payload["sender"].(string)
-	if !responseQuorum.Add(payload["request_id"], sender) {
-		return map[string]any{"status": "waiting_for_quorum", "request_id": payload["request_id"]}
+func processNestedFanoutResponse(request map[string]any, nested map[string]any) (bool, map[string]any) {
+	if shimAggregated, _ := nested["shim_quorum_aggregated"].(bool); !shimAggregated {
+		return false, nil
 	}
 
-	clientResponse := map[string]any{
-		"type":       "response",
-		"request_id": payload["request_id"],
-		"response":   payload["response"],
-		"sender":     sender,
+	output := map[string]any{
+		"request_id": request["request_id"],
+		"status":     "ok",
 	}
-
-	e.ShimCh <- clientResponse
-	return map[string]any{"status": "response_forwarded"}
+	if selectedResponse, ok := nested["response"].(map[string]any); ok {
+		output["response"] = selectedResponse
+	}
+	if base, ok := request["__base_response"].(map[string]any); ok && base != nil {
+		for key, value := range base {
+			if _, exists := output[key]; !exists {
+				output[key] = value
+			}
+		}
+	}
+	return true, output
 }

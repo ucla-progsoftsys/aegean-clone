@@ -78,6 +78,9 @@ func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
 		if pending.token == agreedToken {
 			// Mark state as stable and release responses
 			log.Printf("%s: Committing seq_num %d", e.Name, seqNum)
+			e.stateMu.Lock()
+			e.workingState.KVStore = common.CopyStringMap(pending.state)
+			e.stateMu.Unlock()
 			e.stableState = State{
 				KVStore:  common.CopyStringMap(pending.state),
 				SeqNum:   seqNum,
@@ -114,12 +117,16 @@ func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
 		} else {
 			// If state transfer fails, fall back to rollback
 			log.Printf("%s: State transfer failed, rolling back", e.Name)
+			e.stateMu.Lock()
 			e.workingState.KVStore = common.CopyStringMap(e.stableState.KVStore)
+			e.stateMu.Unlock()
 			e.forceSequential = true
 		}
 	case "rollback":
 		log.Printf("%s: Rolling back to seq_num %d", e.Name, e.stableState.SeqNum)
+		e.stateMu.Lock()
 		e.workingState.KVStore = common.CopyStringMap(e.stableState.KVStore)
+		e.stateMu.Unlock()
 		e.forceSequential = true
 		delete(e.pendingResponses, seqNum)
 		e.mu.Unlock()
