@@ -109,15 +109,20 @@ func processNestedFanoutResponse(e *exec.Exec, requestID any, nested map[string]
 		"request_id": requestID,
 		"status":     "ok",
 	}
-	if selectedResponse, ok := nested["response"].(map[string]any); ok {
-		output["response"] = selectedResponse
-	}
 	if baseAny, ok := e.GetRequestContextValue(requestID, fanoutBaseResponseContextKey); ok && baseAny != nil {
 		if base, ok := baseAny.(map[string]any); ok {
 			for key, value := range base {
 				if _, exists := output[key]; !exists {
 					output[key] = value
 				}
+			}
+		}
+	}
+	// Keep client-facing response flat so it matches expected_result shape in traces
+	if selectedResponse, ok := nested["response"].(map[string]any); ok {
+		for key, value := range selectedResponse {
+			if _, exists := output[key]; !exists {
+				output[key] = value
 			}
 		}
 	}
