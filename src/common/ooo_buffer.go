@@ -47,3 +47,11 @@ func (b *OOOBuffer[T]) Drop(seqNum int) {
 		}
 	}
 }
+
+// Clear removes all buffered messages
+func (b *OOOBuffer[T]) Clear() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.items = make(map[int][]T)
+}

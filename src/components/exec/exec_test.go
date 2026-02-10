@@ -217,11 +217,15 @@ func TestExecVerifyCommitStabilizesAndResponds(t *testing.T) {
 	exec.handleBatch(payload)
 
 	pending := exec.pendingResponses[2]
+	pending.token = exec.computeStateHash(pending.state, pending.outputs, exec.stableState.PrevHash, 2)
+	exec.pendingResponses[2] = pending
 	commitResp := exec.handleVerifyResponse(map[string]any{
-		"type":     "verify_response",
-		"seq_num":  2,
-		"decision": "commit",
-		"token":    pending.token,
+		"type":             "verify_response",
+		"view":             1,
+		"seq_num":          2,
+		"token":            pending.token,
+		"force_sequential": false,
+		"verifier_id":      "ver1",
 	})
 	if commitResp["status"] != "processed" {
 		t.Fatalf("expected processed status, got %v", commitResp["status"])
@@ -280,10 +284,12 @@ func TestExecVerifyMismatchTriggersStateTransfer(t *testing.T) {
 
 	pending := exec.pendingResponses[2]
 	exec.handleVerifyResponse(map[string]any{
-		"type":     "verify_response",
-		"seq_num":  2,
-		"decision": "commit",
-		"token":    pending.token + "-mismatch",
+		"type":             "verify_response",
+		"view":             1,
+		"seq_num":          2,
+		"token":            pending.token + "-mismatch",
+		"force_sequential": false,
+		"verifier_id":      "ver1",
 	})
 
 	expectMessage(t, ts.received, "state_transfer_request")
@@ -344,10 +350,12 @@ func TestExecBuffersVerifyBeforeBatch(t *testing.T) {
 	exec, _, _ := newTestExec("exec1", []string{"exec1"}, nil)
 
 	verifyResp := map[string]any{
-		"type":     "verify_response",
-		"seq_num":  1,
-		"decision": "commit",
-		"token":    "mismatch-token",
+		"type":             "verify_response",
+		"view":             1,
+		"seq_num":          1,
+		"token":            "mismatch-token",
+		"force_sequential": false,
+		"verifier_id":      "ver1",
 	}
 	resp := exec.HandleVerifyResponseMessage(verifyResp)
 	if resp["status"] != "buffered" {
@@ -393,10 +401,12 @@ func TestExecVerifyMismatchFallbackRollback(t *testing.T) {
 
 	pending := exec.pendingResponses[3]
 	exec.handleVerifyResponse(map[string]any{
-		"type":     "verify_response",
-		"seq_num":  3,
-		"decision": "commit",
-		"token":    pending.token + "-mismatch",
+		"type":             "verify_response",
+		"view":             1,
+		"seq_num":          3,
+		"token":            pending.token + "-mismatch",
+		"force_sequential": false,
+		"verifier_id":      "ver1",
 	})
 
 	expectMessage(t, ts.received, "state_transfer_request")
@@ -421,9 +431,12 @@ func TestExecRollbackDecisionForcesSequential(t *testing.T) {
 	}
 
 	exec.handleVerifyResponse(map[string]any{
-		"type":     "verify_response",
-		"seq_num":  4,
-		"decision": "rollback",
+		"type":             "verify_response",
+		"view":             2,
+		"seq_num":          4,
+		"token":            "t1",
+		"force_sequential": true,
+		"verifier_id":      "ver1",
 	})
 
 	if exec.workingState.KVStore["stable"] != "yes" || len(exec.workingState.KVStore) != 1 {

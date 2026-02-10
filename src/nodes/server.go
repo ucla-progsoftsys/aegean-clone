@@ -55,7 +55,7 @@ func NewServer(name, host string, port int, clients []string, verifiers []string
 	server.Batcher = batcher.NewBatcher(name, batcherToMixer, execs, isPrimaryBatcher)
 	server.Mixer = mixer.NewMixer(name, mixerToExec)
 	server.Exec = exec.NewExec(name, verifiers, peers, execToVerifier, execToShim, executeRequest)
-	server.Verifier = verifier.NewVerifier(name, execs, verifierToExec)
+	server.Verifier = verifier.NewVerifier(name, verifiers, execs, verifierToExec)
 
 	server.Node.HandleMessage = server.HandleMessage
 	return server
@@ -129,6 +129,14 @@ func (s *Server) HandleMessage(payload map[string]any) map[string]any {
 		return s.Mixer.HandleBatchMessage(payload)
 	case "verify":
 		return s.Verifier.HandleVerifyMessage(payload)
+	case "prepare":
+		return s.Verifier.HandlePrepareMessage(payload)
+	case "commit":
+		return s.Verifier.HandleCommitMessage(payload)
+	case "view_change":
+		return s.Verifier.HandleViewChangeMessage(payload)
+	case "new_view":
+		return s.Verifier.HandleNewViewMessage(payload)
 	case "verify_response":
 		return s.Exec.HandleVerifyResponseMessage(payload)
 	case "state_transfer_request":

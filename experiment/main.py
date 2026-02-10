@@ -54,7 +54,7 @@ def main():
 
     launch_nodes(node_names)
     logger.info("Waiting for nodes to run")
-    time.sleep(6.0)
+    time.sleep(5.0)
 
     stop_docker_nodes(node_names)
     collect_logs(node_names, client_names)

@@ -2,6 +2,7 @@ package exec
 
 import (
 	"log"
+	"time"
 
 	"aegean/common"
 )
@@ -28,6 +29,7 @@ func (e *Exec) flushNextVerify() bool {
 
 		verifyMsg := map[string]any{
 			"type":      "verify",
+			"view":      e.view,
 			"seq_num":   e.nextVerifySeq,
 			"token":     token,
 			"prev_hash": e.stableState.PrevHash,
@@ -49,17 +51,28 @@ func (e *Exec) flushNextVerify() bool {
 	if len(msgs) == 0 {
 		return false
 	}
+	resolved := false
 	for _, msg := range msgs {
-		_ = e.handleVerifyResponse(msg)
+		resp := e.handleVerifyResponse(msg)
+		if done, _ := resp["resolved"].(bool); done {
+			resolved = true
+		}
 	}
-	e.nextVerifySeq++
-	return true
+	if resolved {
+		e.nextVerifySeq++
+	}
+	return resolved
 }
 
 func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
-	decision, _ := payload["decision"].(string)
 	seqNum := common.GetInt(payload, "seq_num")
 	agreedToken, _ := payload["token"].(string)
+	view := common.GetInt(payload, "view")
+	forceSequential, forceOK := payload["force_sequential"].(bool)
+	verifierID, _ := payload["verifier_id"].(string)
+	if payload["view"] == nil || !forceOK || verifierID == "" || agreedToken == "" {
+		return map[string]any{"status": "invalid_verify_response", "resolved": false}
+	}
 
 	e.mu.Lock()
 	if seqNum <= e.stableState.SeqNum {
@@ -72,70 +85,132 @@ func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
 		return map[string]any{"status": "no_pending_for_seq"}
 	}
 
-	// Handle verification response from verifier
-	switch decision {
-	case "commit":
-		if pending.token == agreedToken {
-			// Mark state as stable and release responses
-			log.Printf("%s: Committing seq_num %d", e.Name, seqNum)
-			e.stateMu.Lock()
-			e.workingState.KVStore = common.CopyStringMap(pending.state)
-			e.stateMu.Unlock()
-			e.stableState = State{
-				KVStore:  common.CopyStringMap(pending.state),
-				SeqNum:   seqNum,
-				PrevHash: agreedToken,
-				Verified: true,
-			}
-			e.forceSequential = false
-			delete(e.pendingResponses, seqNum)
-			outputs := pending.outputs
-			e.mu.Unlock()
-
-			// Send responses back to the server-shim for broadcasting to clients
-			for _, output := range outputs {
-				requestID := output["request_id"]
-				responseMsg := map[string]any{
-					"type":       "response",
-					"request_id": requestID,
-					"response":   output,
-				}
-				if e.ShimCh != nil {
-					e.ShimCh <- responseMsg
-				}
-				log.Printf("%s: Sent response for request %v to shim", e.Name, requestID)
-			}
-			return map[string]any{"status": "processed", "decision": decision}
-		}
-		delete(e.pendingResponses, seqNum)
+	tupleKey := responseTupleKey(view, seqNum, agreedToken, forceSequential)
+	e.verifyResponseMsgs[tupleKey] = payload
+	if _, ok := e.verifyResponseBySeq[seqNum]; !ok {
+		e.verifyResponseBySeq[seqNum] = make(map[string]struct{})
+	}
+	e.verifyResponseBySeq[seqNum][tupleKey] = struct{}{}
+	reached := e.verifyResponseQuorum.Add(tupleKey, verifierID)
+	if !reached {
+		e.ensureVerifyResponseTimerLocked(seqNum)
 		e.mu.Unlock()
-		// TODO: rollback? (I guess we need to introduce parallel pipelining first)
-		// Our state diverged - need state transfer from a replica with correct state
-		log.Printf("%s: State diverged at seq_num %d, requesting state transfer", e.Name, seqNum)
-		if e.requestStateTransfer() {
-			log.Printf("%s: State transfer successful for seq_num %d", e.Name, seqNum)
-		} else {
-			// If state transfer fails, fall back to rollback
-			log.Printf("%s: State transfer failed, rolling back", e.Name)
-			e.stateMu.Lock()
-			e.workingState.KVStore = common.CopyStringMap(e.stableState.KVStore)
-			e.stateMu.Unlock()
-			e.forceSequential = true
-		}
-	case "rollback":
-		log.Printf("%s: Rolling back to seq_num %d", e.Name, e.stableState.SeqNum)
-		e.stateMu.Lock()
-		e.workingState.KVStore = common.CopyStringMap(e.stableState.KVStore)
-		e.stateMu.Unlock()
-		e.forceSequential = true
-		delete(e.pendingResponses, seqNum)
-		e.mu.Unlock()
-		log.Printf("%s: Will execute next batch sequentially", e.Name)
-		return map[string]any{"status": "processed", "decision": decision}
-	default:
-		e.mu.Unlock()
+		return map[string]any{"status": "waiting_quorum", "resolved": false}
 	}
 
-	// Cleanup
-	return map[string]any{"status": "processed", "decision": decision}
+	// Quorum reached for (view, seq_num, token, force_sequential)
+	e.stopVerifyResponseTimerLocked(seqNum)
+	e.clearVerifyResponseTrackingLocked(seqNum)
+	e.mu.Unlock()
+
+	if view > e.view || forceSequential {
+		log.Printf("%s: quorum rollback response received for seq=%d view=%d token=%s", e.Name, seqNum, view, common.TruncateToken(agreedToken))
+		e.view = view
+		e.mu.Lock()
+		delete(e.pendingResponses, seqNum)
+		e.mu.Unlock()
+		if e.rollbackTo(seqNum, agreedToken) {
+			return map[string]any{"status": "processed", "decision": "rollback", "resolved": true}
+		}
+		if e.requestStateTransfer() {
+			e.forceSequential = true
+			return map[string]any{"status": "processed", "decision": "state_transfer", "resolved": true}
+		}
+		e.rollbackWorkingToStable()
+		return map[string]any{"status": "processed", "decision": "rollback_fallback", "resolved": true}
+	}
+
+	if pending.token == agreedToken {
+		e.finalizeCommit(seqNum, pending, agreedToken)
+		return map[string]any{"status": "processed", "decision": "commit", "resolved": true}
+	}
+
+	log.Printf("%s: state diverged at seq=%d, agreed token mismatch", e.Name, seqNum)
+	e.mu.Lock()
+	delete(e.pendingResponses, seqNum)
+	e.mu.Unlock()
+	if e.requestStateTransfer() {
+		return map[string]any{"status": "processed", "decision": "state_transfer", "resolved": true}
+	}
+	e.rollbackWorkingToStable()
+	return map[string]any{"status": "processed", "decision": "rollback_fallback", "resolved": true}
+}
+
+func (e *Exec) finalizeCommit(seqNum int, pending pendingResponse, agreedToken string) {
+	log.Printf("%s: Committing seq_num %d", e.Name, seqNum)
+	e.mu.Lock()
+	delete(e.pendingResponses, seqNum)
+	e.mu.Unlock()
+
+	e.stateMu.Lock()
+	e.workingState.KVStore = common.CopyStringMap(pending.state)
+	e.stateMu.Unlock()
+
+	e.mu.Lock()
+	e.stableState = State{
+		KVStore:  common.CopyStringMap(pending.state),
+		SeqNum:   seqNum,
+		PrevHash: agreedToken,
+		Verified: true,
+	}
+	e.storeCheckpoint(seqNum, agreedToken, pending.state)
+	e.forceSequential = false
+	e.mu.Unlock()
+
+	for _, output := range pending.outputs {
+		requestID := output["request_id"]
+		responseMsg := map[string]any{
+			"type":       "response",
+			"request_id": requestID,
+			"response":   output,
+		}
+		if e.ShimCh != nil {
+			e.ShimCh <- responseMsg
+		}
+	}
+}
+
+func (e *Exec) rollbackWorkingToStable() {
+	e.mu.Lock()
+	stableCopy := common.CopyStringMap(e.stableState.KVStore)
+	e.forceSequential = true
+	e.mu.Unlock()
+
+	e.stateMu.Lock()
+	e.workingState.KVStore = stableCopy
+	e.stateMu.Unlock()
+}
+
+func (e *Exec) ensureVerifyResponseTimerLocked(seqNum int) {
+	if _, ok := e.verifyResponseTimers[seqNum]; ok {
+		return
+	}
+	e.verifyResponseTimers[seqNum] = time.AfterFunc(e.verifyResponseTimeout, func() {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		if seqNum <= e.stableState.SeqNum {
+			delete(e.verifyResponseTimers, seqNum)
+			return
+		}
+		// Timeout fallback: force sequential path
+		e.forceSequential = true
+		delete(e.verifyResponseTimers, seqNum)
+	})
+}
+
+func (e *Exec) stopVerifyResponseTimerLocked(seqNum int) {
+	timer, ok := e.verifyResponseTimers[seqNum]
+	if !ok || timer == nil {
+		return
+	}
+	timer.Stop()
+	delete(e.verifyResponseTimers, seqNum)
+}
+
+func (e *Exec) clearVerifyResponseTrackingLocked(seqNum int) {
+	keys := e.verifyResponseBySeq[seqNum]
+	for key := range keys {
+		delete(e.verifyResponseMsgs, key)
+	}
+	delete(e.verifyResponseBySeq, seqNum)
 }

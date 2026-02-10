@@ -1,9 +1,11 @@
 package exec
 
 import (
+	"fmt"
 	"log"
 	"strings"
 	"sync"
+	"time"
 
 	"aegean/common"
 )
@@ -35,6 +37,20 @@ type Exec struct {
 	pendingResponses map[int]pendingResponse
 	// Sequential execution flag (set after rollback)
 	forceSequential bool
+	// Hard-coded fault parameters for now.
+	u int
+	r int
+	// Current execution view.
+	view int
+	// Quorum + dedupe for verify responses from verifiers.
+	verifyResponseQuorum *common.QuorumHelper
+	verifyResponseMsgs   map[string]map[string]any // response tuple key -> payload
+	verifyResponseBySeq  map[int]map[string]struct{}
+	// Checkpoints for rollback to agreed (n, T).
+	checkpoints map[int]rollbackCheckpoint
+	// Timeout for unresolved verifier responses.
+	verifyResponseTimeout time.Duration
+	verifyResponseTimers  map[int]*time.Timer
 	// Out-of-order buffers
 	batchBuffer   *common.OOOBuffer[map[string]any]
 	verifyBuffer  *common.OOOBuffer[map[string]any]
@@ -78,14 +94,28 @@ func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- 
 		stableState:      stable,
 		workingState:     working,
 		pendingResponses: make(map[int]pendingResponse),
+		u:                1,
+		r:                0,
+		view:             1,
+		verifyResponseMsgs: make(map[string]map[string]any),
+		verifyResponseBySeq: make(map[int]map[string]struct{}),
+		checkpoints:      make(map[int]rollbackCheckpoint),
+		verifyResponseTimeout: 2 * time.Second,
+		verifyResponseTimers:  make(map[int]*time.Timer),
 		batchBuffer:      common.NewOOOBuffer[map[string]any](),
 		verifyBuffer:     common.NewOOOBuffer[map[string]any](),
 		nextBatchSeq:     1,
 		nextVerifySeq:    1,
 		workerCount:      4,
 	}
+	exec.verifyResponseQuorum = common.NewQuorumHelper(exec.r + 1)
+	exec.storeCheckpoint(0, stable.PrevHash, stable.KVStore)
 	exec.scheduler = newExecScheduler()
 	return exec
+}
+
+func responseTupleKey(view int, seqNum int, token string, forceSequential bool) string {
+	return fmt.Sprintf("%d|%d|%s|%t", view, seqNum, token, forceSequential)
 }
 
 func (e *Exec) ReadKV(key string) string {
