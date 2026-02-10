@@ -21,7 +21,7 @@
     "execs": ["node4", "node5", "node6"],
     "peers": ["node5", "node6"],
     "is_primary_batcher": true,
-    "exec_workflow": "fanout"
+    "exec_workflow": "middle"
   },
   "node5": {
     "type": "server",
@@ -30,7 +30,7 @@
     "execs": ["node4", "node5", "node6"],
     "peers": ["node4", "node6"],
     "is_primary_batcher": false,
-    "exec_workflow": "fanout"
+    "exec_workflow": "middle"
   },
   "node6": {
     "type": "server",
@@ -39,7 +39,7 @@
     "execs": ["node4", "node5", "node6"],
     "peers": ["node4", "node5"],
     "is_primary_batcher": false,
-    "exec_workflow": "fanout"
+    "exec_workflow": "middle"
   },
   "node7": {
     "type": "server",
@@ -48,7 +48,7 @@
     "execs": ["node7", "node8", "node9"],
     "peers": ["node8", "node9"],
     "is_primary_batcher": true,
-    "exec_workflow": "default"
+    "exec_workflow": "backend"
   },
   "node8": {
     "type": "server",
@@ -57,7 +57,7 @@
     "execs": ["node7", "node8", "node9"],
     "peers": ["node7", "node9"],
     "is_primary_batcher": false,
-    "exec_workflow": "default"
+    "exec_workflow": "backend"
   },
   "node9": {
     "type": "server",
@@ -66,6 +66,6 @@
     "execs": ["node7", "node8", "node9"],
     "peers": ["node7", "node8"],
     "is_primary_batcher": false,
-    "exec_workflow": "default"
+    "exec_workflow": "backend"
   }
 }

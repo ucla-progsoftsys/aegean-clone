@@ -11,6 +11,7 @@ type Client struct {
 	Next              []string
 	completedRequests map[string]struct{}
 	mu                sync.Mutex
+	cond              *sync.Cond
 	RequestLogic      func(c *Client)
 }
 
@@ -24,6 +25,7 @@ func NewClient(name, host string, port int, next []string, requestLogic func(c *
 		completedRequests: make(map[string]struct{}),
 		RequestLogic:      requestLogic,
 	}
+	client.cond = sync.NewCond(&client.mu)
 	client.Node.HandleMessage = client.HandleMessage
 	return client
 }
@@ -55,6 +57,7 @@ func (c *Client) HandleMessage(payload map[string]any) map[string]any {
 	// In CFT mode with a single exec pipeline, one response is sufficient
 	log.Printf("Client %s: Received response for request %v: %v", c.Name, requestID, response)
 	c.completedRequests[key] = struct{}{}
+	c.cond.Broadcast()
 	// TODO: In full BFT mode, would wait for f+1 matching responses
 	log.Printf("Client %s: Request %v completed with: %v", c.Name, requestID, response)
 
@@ -65,4 +68,18 @@ func (c *Client) HandleMessage(payload map[string]any) map[string]any {
 
 func toKey(value any) string {
 	return fmt.Sprintf("%v", value)
+}
+
+func (c *Client) WaitForRequestCompletion(requestID any) {
+	key := toKey(requestID)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for {
+		if _, done := c.completedRequests[key]; done {
+			return
+		}
+		c.cond.Wait()
+	}
 }

@@ -9,7 +9,8 @@ var ClientWorkflows = map[string]func(c *nodes.Client){}
 var ExecWorkflows = map[string]exec.ExecuteRequestFunc{}
 
 func init() {
-	ClientWorkflows["default"] = ClientRequestLogic
-	ExecWorkflows["default"] = ExecuteRequest
-	ExecWorkflows["fanout"] = ExecuteRequestFanout
+	ClientWorkflows["default"] = ClientRequestLogicWaitForResponse
+	ClientWorkflows["pipelined"] = ClientRequestLogic
+	ExecWorkflows["backend"] = ExecuteRequest
+	ExecWorkflows["middle"] = ExecuteRequestFanout
 }
