@@ -110,7 +110,7 @@ func (e *Exec) requestStateTransfer() bool {
 			PrevHash:   transferredPrevHash,
 			Verified:   true,
 		}
-		e.storeCheckpoint(e.stableState.SeqNum, e.stableState.PrevHash, merged, mergedMerkle, mergedMerkle.Root())
+		e.storeCheckpoint(e.stableState.SeqNum, e.stableState.PrevHash, mergedMerkle, mergedMerkle.Root())
 		e.forceSequential = false
 		for seq := range e.pendingResponses {
 			if seq <= e.stableState.SeqNum {

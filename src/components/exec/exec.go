@@ -123,7 +123,7 @@ func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- 
 		workerCount:           4,
 	}
 	exec.verifyResponseQuorum = common.NewQuorumHelper(exec.r + 1)
-	exec.storeCheckpoint(0, stable.PrevHash, stable.KVStore, stable.Merkle, stable.MerkleRoot)
+	exec.storeCheckpoint(0, stable.PrevHash, stable.Merkle, stable.MerkleRoot)
 	exec.scheduler = newExecScheduler()
 	return exec
 }

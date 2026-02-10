@@ -165,7 +165,7 @@ func (e *Exec) finalizeCommit(seqNum int, pending pendingResponse, agreedToken s
 		PrevHash:   agreedToken,
 		Verified:   true,
 	}
-	e.storeCheckpoint(seqNum, agreedToken, pending.state, pending.merkle, pending.merkleRoot)
+	e.storeCheckpoint(seqNum, agreedToken, pending.merkle, pending.merkleRoot)
 	e.forceSequential = false
 	e.mu.Unlock()
 
