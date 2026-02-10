@@ -3,6 +3,7 @@ package exec
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,11 @@ type pendingResponse struct {
 	token      string
 	// verifySent indicates whether a verify message has been sent for this seq
 	verifySent bool
+}
+
+type batchMerkleContext struct {
+	baseKeys   map[string]struct{}
+	pendingNew map[string]string
 }
 
 // ExecuteRequestFunc handles a single request for an exec node.
@@ -60,6 +66,7 @@ type Exec struct {
 	nextVerifySeq int
 	workerCount   int
 	scheduler     *execScheduler
+	batchCtx      *batchMerkleContext
 	// Request execution hook
 	ExecuteRequest ExecuteRequestFunc
 }
@@ -126,9 +133,14 @@ func responseTupleKey(view int, seqNum int, token string, forceSequential bool) 
 }
 
 func (e *Exec) ReadKV(key string) string {
-	e.stateMu.RLock()
-	defer e.stateMu.RUnlock()
+	e.stateMu.Lock()
+	defer e.stateMu.Unlock()
 	e.workingState.EnsureMerkle()
+	if e.batchCtx != nil {
+		if value, ok := e.batchCtx.pendingNew[key]; ok {
+			return value
+		}
+	}
 	return e.workingState.Merkle.Get(key)
 }
 
@@ -136,9 +148,51 @@ func (e *Exec) WriteKV(key, value string) {
 	e.stateMu.Lock()
 	defer e.stateMu.Unlock()
 	e.workingState.EnsureMerkle()
+	if e.batchCtx != nil {
+		if _, ok := e.batchCtx.baseKeys[key]; !ok {
+			// Defer insertion of newly created keys to batch end and insert deterministically.
+			e.batchCtx.pendingNew[key] = value
+			return
+		}
+	}
 	e.workingState.Merkle.Set(key, value)
 	e.workingState.KVStore = e.workingState.Merkle.SnapshotMap()
 	e.workingState.MerkleRoot = e.workingState.Merkle.Root()
+}
+
+func (e *Exec) beginBatchMerkleContext() {
+	e.stateMu.Lock()
+	defer e.stateMu.Unlock()
+	e.workingState.EnsureMerkle()
+	baseKeys := make(map[string]struct{}, len(e.workingState.KVStore))
+	for key := range e.workingState.KVStore {
+		baseKeys[key] = struct{}{}
+	}
+	e.batchCtx = &batchMerkleContext{
+		baseKeys:   baseKeys,
+		pendingNew: make(map[string]string),
+	}
+}
+
+func (e *Exec) finalizeBatchMerkleContext() {
+	e.stateMu.Lock()
+	defer e.stateMu.Unlock()
+	if e.batchCtx == nil {
+		return
+	}
+	if len(e.batchCtx.pendingNew) > 0 {
+		keys := make([]string, 0, len(e.batchCtx.pendingNew))
+		for key := range e.batchCtx.pendingNew {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			e.workingState.Merkle.Set(key, e.batchCtx.pendingNew[key])
+		}
+	}
+	e.workingState.KVStore = e.workingState.Merkle.SnapshotMap()
+	e.workingState.MerkleRoot = e.workingState.Merkle.Root()
+	e.batchCtx = nil
 }
 
 func (e *Exec) BufferNestedResponse(payload map[string]any) bool {

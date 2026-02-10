@@ -35,15 +35,18 @@ func (e *Exec) handleBatch(payload map[string]any) map[string]any {
 	}
 	log.Printf("%s: Executing batch %d with %d parallelBatches", e.Name, seqNum, len(parallelBatches))
 
+	// Defer insertion of new keys to end-of-batch deterministic phase.
+	e.beginBatchMerkleContext()
 	// Execute all parallelBatches and collect outputs
 	outputs := e.executeParallelBatches(parallelBatches, ndSeed, ndTimestamp)
+	e.finalizeBatchMerkleContext()
 
-	e.stateMu.RLock()
+	e.stateMu.Lock()
 	e.workingState.EnsureMerkle()
 	merkleSnapshot := e.workingState.Merkle.Clone()
 	stateSnapshot := merkleSnapshot.SnapshotMap()
 	stateRoot := merkleSnapshot.Root()
-	e.stateMu.RUnlock()
+	e.stateMu.Unlock()
 
 	e.mu.Lock()
 	e.pendingResponses[seqNum] = pendingResponse{

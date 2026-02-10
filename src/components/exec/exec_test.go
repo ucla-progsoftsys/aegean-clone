@@ -479,6 +479,34 @@ func TestComputeStateHashDeterministicOrdering(t *testing.T) {
 	}
 }
 
+func TestDeferredNewKeyInsertionDeterministicAtBatchEnd(t *testing.T) {
+	execA, _, _ := newTestExec("execA", nil, nil)
+	execB, _, _ := newTestExec("execB", nil, nil)
+
+	execA.beginBatchMerkleContext()
+	execA.WriteKV("z", "26")
+	execA.WriteKV("a", "1")
+	if got := execA.ReadKV("a"); got != "1" {
+		t.Fatalf("expected pending new key to be readable during batch, got %q", got)
+	}
+	if _, ok := execA.workingState.KVStore["a"]; ok {
+		t.Fatalf("expected new key to be deferred before finalize")
+	}
+	execA.finalizeBatchMerkleContext()
+
+	execB.beginBatchMerkleContext()
+	execB.WriteKV("a", "1")
+	execB.WriteKV("z", "26")
+	execB.finalizeBatchMerkleContext()
+
+	if execA.workingState.MerkleRoot != execB.workingState.MerkleRoot {
+		t.Fatalf("expected deterministic root after deferred insertion, got %s vs %s", execA.workingState.MerkleRoot, execB.workingState.MerkleRoot)
+	}
+	if execA.ReadKV("a") != "1" || execA.ReadKV("z") != "26" {
+		t.Fatalf("expected finalized new keys in working state, got %v", execA.workingState.KVStore)
+	}
+}
+
 func TestExecBlockedRequestResumesAfterNestedResponse(t *testing.T) {
 	verifierCh := make(chan map[string]any, 8)
 	shimCh := make(chan map[string]any, 8)
