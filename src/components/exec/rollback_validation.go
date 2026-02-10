@@ -5,11 +5,11 @@ import (
 	"encoding/hex"
 )
 
-func computeCheckpointValidationHash(seqNum int, token string, state map[string]string) string {
+func computeCheckpointValidationHash(seqNum int, token string, stateRoot string) string {
 	payload := map[string]any{
-		"seq_num": seqNum,
-		"token":   token,
-		"state":   state,
+		"seq_num":    seqNum,
+		"token":      token,
+		"state_root": stateRoot,
 	}
 	sum := sha256.Sum256(marshalSorted(payload))
 	return hex.EncodeToString(sum[:])
@@ -19,6 +19,6 @@ func (e *Exec) validateRollbackCheckpoint(cp rollbackCheckpoint, expectedToken s
 	if cp.Token != expectedToken {
 		return false
 	}
-	recomputed := computeCheckpointValidationHash(cp.SeqNum, cp.Token, cp.State)
+	recomputed := computeCheckpointValidationHash(cp.SeqNum, cp.Token, cp.MerkleRoot)
 	return recomputed == cp.ValidationHash
 }

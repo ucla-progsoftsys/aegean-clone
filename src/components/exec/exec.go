@@ -11,9 +11,11 @@ import (
 )
 
 type pendingResponse struct {
-	outputs []map[string]any
-	state   map[string]string
-	token   string
+	outputs    []map[string]any
+	state      map[string]string
+	merkle     *MerkleTree
+	merkleRoot string
+	token      string
 	// verifySent indicates whether a verify message has been sent for this seq
 	verifySent bool
 }
@@ -72,44 +74,49 @@ func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- 
 		log.Fatalf("exec component requires ExecuteRequest")
 	}
 	initialKV := map[string]string{"1": "111"}
+	initialMerkle := NewMerkleTreeFromMap(initialKV)
 	stable := State{
-		KVStore:  common.CopyStringMap(initialKV),
-		SeqNum:   0,
-		PrevHash: strings.Repeat("0", 64),
-		Verified: true,
+		KVStore:    common.CopyStringMap(initialKV),
+		Merkle:     initialMerkle.Clone(),
+		MerkleRoot: initialMerkle.Root(),
+		SeqNum:     0,
+		PrevHash:   strings.Repeat("0", 64),
+		Verified:   true,
 	}
 	working := State{
-		KVStore:  initialKV,
-		SeqNum:   0,
-		PrevHash: stable.PrevHash,
-		Verified: false,
+		KVStore:    common.CopyStringMap(initialKV),
+		Merkle:     initialMerkle.Clone(),
+		MerkleRoot: initialMerkle.Root(),
+		SeqNum:     0,
+		PrevHash:   stable.PrevHash,
+		Verified:   false,
 	}
 	exec := &Exec{
-		Name:             name,
-		Verifiers:        verifiers,
-		Peers:            peers,
-		VerifierCh:       verifierCh,
-		ShimCh:           shimCh,
-		ExecuteRequest:   executeRequest,
-		stableState:      stable,
-		workingState:     working,
-		pendingResponses: make(map[int]pendingResponse),
-		u:                1,
-		r:                0,
-		view:             1,
-		verifyResponseMsgs: make(map[string]map[string]any),
-		verifyResponseBySeq: make(map[int]map[string]struct{}),
-		checkpoints:      make(map[int]rollbackCheckpoint),
+		Name:                  name,
+		Verifiers:             verifiers,
+		Peers:                 peers,
+		VerifierCh:            verifierCh,
+		ShimCh:                shimCh,
+		ExecuteRequest:        executeRequest,
+		stableState:           stable,
+		workingState:          working,
+		pendingResponses:      make(map[int]pendingResponse),
+		u:                     1,
+		r:                     0,
+		view:                  1,
+		verifyResponseMsgs:    make(map[string]map[string]any),
+		verifyResponseBySeq:   make(map[int]map[string]struct{}),
+		checkpoints:           make(map[int]rollbackCheckpoint),
 		verifyResponseTimeout: 2 * time.Second,
 		verifyResponseTimers:  make(map[int]*time.Timer),
-		batchBuffer:      common.NewOOOBuffer[map[string]any](),
-		verifyBuffer:     common.NewOOOBuffer[map[string]any](),
-		nextBatchSeq:     1,
-		nextVerifySeq:    1,
-		workerCount:      4,
+		batchBuffer:           common.NewOOOBuffer[map[string]any](),
+		verifyBuffer:          common.NewOOOBuffer[map[string]any](),
+		nextBatchSeq:          1,
+		nextVerifySeq:         1,
+		workerCount:           4,
 	}
 	exec.verifyResponseQuorum = common.NewQuorumHelper(exec.r + 1)
-	exec.storeCheckpoint(0, stable.PrevHash, stable.KVStore)
+	exec.storeCheckpoint(0, stable.PrevHash, stable.KVStore, stable.Merkle, stable.MerkleRoot)
 	exec.scheduler = newExecScheduler()
 	return exec
 }
@@ -121,13 +128,17 @@ func responseTupleKey(view int, seqNum int, token string, forceSequential bool) 
 func (e *Exec) ReadKV(key string) string {
 	e.stateMu.RLock()
 	defer e.stateMu.RUnlock()
-	return e.workingState.KVStore[key]
+	e.workingState.EnsureMerkle()
+	return e.workingState.Merkle.Get(key)
 }
 
 func (e *Exec) WriteKV(key, value string) {
 	e.stateMu.Lock()
 	defer e.stateMu.Unlock()
-	e.workingState.KVStore[key] = value
+	e.workingState.EnsureMerkle()
+	e.workingState.Merkle.Set(key, value)
+	e.workingState.KVStore = e.workingState.Merkle.SnapshotMap()
+	e.workingState.MerkleRoot = e.workingState.Merkle.Root()
 }
 
 func (e *Exec) BufferNestedResponse(payload map[string]any) bool {

@@ -20,17 +20,22 @@ func (e *Exec) rollbackTo(seqNum int, token string) bool {
 	e.verifyBuffer.Clear()
 	e.nextBatchSeq = seqNum + 1
 	e.nextVerifySeq = seqNum + 1
+	checkpointMerkle := checkpoint.Merkle.Clone()
 	e.stableState = State{
-		KVStore:  common.CopyStringMap(checkpoint.State),
-		SeqNum:   checkpoint.SeqNum,
-		PrevHash: checkpoint.Token,
-		Verified: true,
+		KVStore:    common.CopyStringMap(checkpoint.State),
+		Merkle:     checkpointMerkle,
+		MerkleRoot: checkpoint.MerkleRoot,
+		SeqNum:     checkpoint.SeqNum,
+		PrevHash:   checkpoint.Token,
+		Verified:   true,
 	}
 	e.forceSequential = true
 	e.mu.Unlock()
 
 	e.stateMu.Lock()
 	e.workingState.KVStore = common.CopyStringMap(checkpoint.State)
+	e.workingState.Merkle = checkpointMerkle.Clone()
+	e.workingState.MerkleRoot = checkpoint.MerkleRoot
 	e.stateMu.Unlock()
 	return true
 }

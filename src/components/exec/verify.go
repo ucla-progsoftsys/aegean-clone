@@ -20,7 +20,11 @@ func (e *Exec) flushNextVerify() bool {
 	}
 	// Compute token with committed prevHash to avoid divergence
 	if !pending.verifySent {
-		token := e.computeStateHash(pending.state, pending.outputs, e.stableState.PrevHash, e.nextVerifySeq)
+		if pending.merkle == nil {
+			pending.merkle = NewMerkleTreeFromMap(pending.state)
+			pending.merkleRoot = pending.merkle.Root()
+		}
+		token := e.computeStateHash(pending.merkleRoot, pending.outputs, e.stableState.PrevHash, e.nextVerifySeq)
 		pending.token = token
 		pending.verifySent = true
 		e.mu.Lock()
@@ -138,22 +142,30 @@ func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
 
 func (e *Exec) finalizeCommit(seqNum int, pending pendingResponse, agreedToken string) {
 	log.Printf("%s: Committing seq_num %d", e.Name, seqNum)
+	if pending.merkle == nil {
+		pending.merkle = NewMerkleTreeFromMap(pending.state)
+		pending.merkleRoot = pending.merkle.Root()
+	}
 	e.mu.Lock()
 	delete(e.pendingResponses, seqNum)
 	e.mu.Unlock()
 
 	e.stateMu.Lock()
 	e.workingState.KVStore = common.CopyStringMap(pending.state)
+	e.workingState.Merkle = pending.merkle.Clone()
+	e.workingState.MerkleRoot = pending.merkleRoot
 	e.stateMu.Unlock()
 
 	e.mu.Lock()
 	e.stableState = State{
-		KVStore:  common.CopyStringMap(pending.state),
-		SeqNum:   seqNum,
-		PrevHash: agreedToken,
-		Verified: true,
+		KVStore:    common.CopyStringMap(pending.state),
+		Merkle:     pending.merkle.Clone(),
+		MerkleRoot: pending.merkleRoot,
+		SeqNum:     seqNum,
+		PrevHash:   agreedToken,
+		Verified:   true,
 	}
-	e.storeCheckpoint(seqNum, agreedToken, pending.state)
+	e.storeCheckpoint(seqNum, agreedToken, pending.state, pending.merkle, pending.merkleRoot)
 	e.forceSequential = false
 	e.mu.Unlock()
 
@@ -172,12 +184,17 @@ func (e *Exec) finalizeCommit(seqNum int, pending pendingResponse, agreedToken s
 
 func (e *Exec) rollbackWorkingToStable() {
 	e.mu.Lock()
+	e.stableState.EnsureMerkle()
 	stableCopy := common.CopyStringMap(e.stableState.KVStore)
+	stableMerkle := e.stableState.Merkle.Clone()
+	stableRoot := e.stableState.MerkleRoot
 	e.forceSequential = true
 	e.mu.Unlock()
 
 	e.stateMu.Lock()
 	e.workingState.KVStore = stableCopy
+	e.workingState.Merkle = stableMerkle
+	e.workingState.MerkleRoot = stableRoot
 	e.stateMu.Unlock()
 }
 

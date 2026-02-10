@@ -8,14 +8,12 @@ import (
 	"sort"
 )
 
-func (e *Exec) computeStateHash(state map[string]string, outputs []map[string]any, prevHash string, seqNum int) string {
-	// TODO: Merkle tree
-	// Compute Merkle-tree-style hash of state and outputs
+func (e *Exec) computeStateHash(stateRoot string, outputs []map[string]any, prevHash string, seqNum int) string {
 	data := map[string]any{
-		"seq_num":   seqNum,
-		"prev_hash": prevHash,
-		"state":     state,
-		"outputs":   outputs,
+		"seq_num":    seqNum,
+		"prev_hash":  prevHash,
+		"state_root": stateRoot,
+		"outputs":    outputs,
 	}
 	encoded := marshalSorted(data)
 	hash := sha256.Sum256(encoded)

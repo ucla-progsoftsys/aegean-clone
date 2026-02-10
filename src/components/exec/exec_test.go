@@ -181,7 +181,7 @@ func TestExecHandleBatchSendsVerifyAndTracksPending(t *testing.T) {
 		t.Fatalf("expected 2 outputs, got %d", len(pending.outputs))
 	}
 
-	expectedToken := exec.computeStateHash(pending.state, pending.outputs, exec.stableState.PrevHash, 1)
+	expectedToken := exec.computeStateHash(pending.merkleRoot, pending.outputs, exec.stableState.PrevHash, 1)
 	if pending.token != expectedToken {
 		t.Fatalf("expected pending token %s, got %s", expectedToken, pending.token)
 	}
@@ -217,7 +217,7 @@ func TestExecVerifyCommitStabilizesAndResponds(t *testing.T) {
 	exec.handleBatch(payload)
 
 	pending := exec.pendingResponses[2]
-	pending.token = exec.computeStateHash(pending.state, pending.outputs, exec.stableState.PrevHash, 2)
+	pending.token = exec.computeStateHash(pending.merkleRoot, pending.outputs, exec.stableState.PrevHash, 2)
 	exec.pendingResponses[2] = pending
 	commitResp := exec.handleVerifyResponse(map[string]any{
 		"type":             "verify_response",
@@ -255,13 +255,17 @@ func TestExecVerifyCommitStabilizesAndResponds(t *testing.T) {
 // Token mismatch triggers state transfer and applies a newer stable state
 func TestExecVerifyMismatchTriggersStateTransfer(t *testing.T) {
 	transferredState := map[string]any{"a": "10", "b": "20"}
+	transferredMerkle := NewMerkleTreeFromMap(map[string]string{"a": "10", "b": "20"})
 	ts := startTestServer(t, func(req map[string]any) map[string]any {
 		if req["type"] == "state_transfer_request" {
 			return map[string]any{
 				"status":         "ok",
-				"state":          transferredState,
+				"mode":           "delta",
+				"updates":        transferredState,
+				"deletes":        []string{"x"},
 				"stable_seq_num": 5,
 				"prev_hash":      "hash-after-transfer",
+				"state_root":     transferredMerkle.Root(),
 			}
 		}
 		return map[string]any{"status": "ok"}
@@ -465,8 +469,10 @@ func TestComputeStateHashDeterministicOrdering(t *testing.T) {
 	outputsA := []map[string]any{{"z": 1, "a": 2}}
 	outputsB := []map[string]any{{"a": 2, "z": 1}}
 
-	hashA := exec.computeStateHash(stateA, outputsA, "prev", 1)
-	hashB := exec.computeStateHash(stateB, outputsB, "prev", 1)
+	rootA := NewMerkleTreeFromMap(stateA).Root()
+	rootB := NewMerkleTreeFromMap(stateB).Root()
+	hashA := exec.computeStateHash(rootA, outputsA, "prev", 1)
+	hashB := exec.computeStateHash(rootB, outputsB, "prev", 1)
 
 	if hashA != hashB {
 		t.Fatalf("expected deterministic hash, got %s and %s", hashA, hashB)

@@ -39,14 +39,19 @@ func (e *Exec) handleBatch(payload map[string]any) map[string]any {
 	outputs := e.executeParallelBatches(parallelBatches, ndSeed, ndTimestamp)
 
 	e.stateMu.RLock()
-	stateSnapshot := common.CopyStringMap(e.workingState.KVStore)
+	e.workingState.EnsureMerkle()
+	merkleSnapshot := e.workingState.Merkle.Clone()
+	stateSnapshot := merkleSnapshot.SnapshotMap()
+	stateRoot := merkleSnapshot.Root()
 	e.stateMu.RUnlock()
 
 	e.mu.Lock()
 	e.pendingResponses[seqNum] = pendingResponse{
-		outputs: outputs,
-		state:   stateSnapshot,
-		token:   "",
+		outputs:    outputs,
+		state:      stateSnapshot,
+		merkle:     merkleSnapshot,
+		merkleRoot: stateRoot,
+		token:      "",
 	}
 	e.mu.Unlock()
 	return map[string]any{"status": "executed", "seq_num": seqNum}
