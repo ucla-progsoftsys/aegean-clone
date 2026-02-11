@@ -240,6 +240,15 @@ func TestExecVerifyCommitStabilizesAndResponds(t *testing.T) {
 	if exec.forceSequential {
 		t.Fatalf("expected forceSequential false after commit")
 	}
+	if _, ok := exec.checkpoints[0]; ok {
+		t.Fatalf("expected checkpoint 0 to be garbage-collected after commit")
+	}
+	if _, ok := exec.checkpoints[2]; !ok {
+		t.Fatalf("expected checkpoint 2 to be retained after commit")
+	}
+	if len(exec.checkpoints) != 1 {
+		t.Fatalf("expected only highest stable checkpoint to remain, got %d", len(exec.checkpoints))
+	}
 
 	if _, ok := exec.pendingExecResults[2]; ok {
 		t.Fatalf("expected pendingExecResults to be cleared after commit")
@@ -306,6 +315,15 @@ func TestExecVerifyMismatchTriggersStateTransfer(t *testing.T) {
 	}
 	if exec.forceSequential {
 		t.Fatalf("expected forceSequential false after successful state transfer")
+	}
+	if _, ok := exec.checkpoints[0]; ok {
+		t.Fatalf("expected checkpoint 0 to be garbage-collected after state transfer")
+	}
+	if _, ok := exec.checkpoints[5]; !ok {
+		t.Fatalf("expected checkpoint 5 to be retained after state transfer")
+	}
+	if len(exec.checkpoints) != 1 {
+		t.Fatalf("expected only highest stable checkpoint to remain, got %d", len(exec.checkpoints))
 	}
 	if exec.workingState.KVStore["a"] != "10" || exec.workingState.KVStore["b"] != "20" {
 		t.Fatalf("expected kvStore to match transferred state, got %v", exec.workingState.KVStore)

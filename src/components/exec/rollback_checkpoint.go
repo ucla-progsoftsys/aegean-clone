@@ -23,4 +23,17 @@ func (e *Exec) storeCheckpoint(seqNum int, token string, merkle *MerkleTree, mer
 		MerkleRoot:     merkleRoot,
 		ValidationHash: computeCheckpointValidationHash(seqNum, token, merkleRoot),
 	}
+	e.gcStableCheckpoints(seqNum)
+}
+
+func (e *Exec) gcStableCheckpoints(newStableSeqNum int) {
+	highestStableSeqNum := newStableSeqNum
+	if e.stableState.SeqNum > highestStableSeqNum {
+		highestStableSeqNum = e.stableState.SeqNum
+	}
+	for seqNum := range e.checkpoints {
+		if seqNum < highestStableSeqNum {
+			delete(e.checkpoints, seqNum)
+		}
+	}
 }

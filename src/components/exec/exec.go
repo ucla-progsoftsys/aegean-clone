@@ -65,11 +65,11 @@ type Exec struct {
 	// Current execution view.
 	view int
 	// Quorum + dedupe for verify responses from verifiers.
+	// TODO: Can we simplify these 3?
 	verifyResponseQuorum *common.QuorumHelper
 	verifyResponseMsgs   map[string]map[string]any // response tuple key -> payload
 	verifyResponseBySeq  map[int]map[string]struct{}
 	// Checkpoints for rollback to agreed (n, T).
-	// Need to fix this: implement GC
 	checkpoints map[int]rollbackCheckpoint
 	// Timeout for unresolved verifier responses.
 	verifyResponseTimeout time.Duration
