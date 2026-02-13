@@ -54,7 +54,7 @@ func main() {
 		if execFn == nil {
 			log.Fatalf("unknown exec workflow %q for node %s", execWorkflow, *name)
 		}
-		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Verifiers, cfg.Peers, cfg.Execs, cfg.IsPrimaryBatcher, cfg.ShimQuorumSize, cfg.VerifyResponseQuorumSize, cfg.ExecVerifyQuorumSize, cfg.PhaseQuorumSize, cfg.ExpectedExecVotes, execFn)
+		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Nodes, cfg.IsPrimaryBatcher, cfg.ShimQuorumSize, cfg.VerifyResponseQuorumSize, cfg.ExecVerifyQuorumSize, cfg.PhaseQuorumSize, cfg.ExpectedExecVotes, execFn)
 	default:
 		log.Fatalf("unrecognized node type: %s", cfg.Type)
 	}
