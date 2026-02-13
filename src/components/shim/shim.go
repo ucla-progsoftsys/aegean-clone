@@ -15,7 +15,7 @@ type Shim struct {
 	responseQuorumHelper *common.QuorumHelper
 }
 
-func NewShim(name string, batcherCh chan<- map[string]any, execCh chan<- map[string]any, clients []string) *Shim {
+func NewShim(name string, batcherCh chan<- map[string]any, execCh chan<- map[string]any, clients []string, quorumSize int) *Shim {
 	if batcherCh == nil {
 		log.Fatalf("shim component requires non-nil batcherCh")
 	}
@@ -24,8 +24,8 @@ func NewShim(name string, batcherCh chan<- map[string]any, execCh chan<- map[str
 		BatcherCh:            batcherCh,
 		ExecCh:               execCh,
 		Clients:              clients,
-		requestQuorumHelper:  common.NewQuorumHelper(2), // TODO: Replace hard-coded value with formula
-		responseQuorumHelper: common.NewQuorumHelper(2), // TODO: Replace hard-coded value with formula
+		requestQuorumHelper:  common.NewQuorumHelper(quorumSize),
+		responseQuorumHelper: common.NewQuorumHelper(quorumSize),
 	}
 	return shim
 }

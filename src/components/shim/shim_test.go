@@ -80,7 +80,7 @@ func expectNoShimMessage(t *testing.T, ch <-chan map[string]any, wait time.Durat
 // Forwards a client request only after quorum of senders is reached
 func TestShimForwardsOnQuorum(t *testing.T) {
 	batcherCh := make(chan map[string]any, 16)
-	shim := NewShim("shim", batcherCh, nil, nil)
+	shim := NewShim("shim", batcherCh, nil, nil, 2)
 
 	first := shim.HandleRequestMessage(map[string]any{
 		"type":       "request",
@@ -110,7 +110,7 @@ func TestShimForwardsOnQuorum(t *testing.T) {
 // Duplicate senders do not advance quorum
 func TestShimIgnoresDuplicateSenderUntilQuorum(t *testing.T) {
 	batcherCh := make(chan map[string]any, 16)
-	shim := NewShim("shim", batcherCh, nil, nil)
+	shim := NewShim("shim", batcherCh, nil, nil, 2)
 
 	first := shim.HandleRequestMessage(map[string]any{
 		"type":       "request",
@@ -149,7 +149,7 @@ func TestShimBroadcastsResponseToClients(t *testing.T) {
 	defer ts.close()
 
 	batcherCh := make(chan map[string]any, 16)
-	shim := NewShim("shim", batcherCh, nil, []string{"127.0.0.1", "127.0.0.1"})
+	shim := NewShim("shim", batcherCh, nil, []string{"127.0.0.1", "127.0.0.1"}, 2)
 
 	resp := shim.HandleOutgoingResponse(map[string]any{
 		"type":       "response",
@@ -170,7 +170,7 @@ func TestShimBroadcastsResponseToClients(t *testing.T) {
 // Missing type defaults to a client request and follows quorum forwarding
 func TestShimDefaultsToRequestType(t *testing.T) {
 	batcherCh := make(chan map[string]any, 16)
-	shim := NewShim("shim", batcherCh, nil, nil)
+	shim := NewShim("shim", batcherCh, nil, nil, 2)
 
 	shim.HandleRequestMessage(map[string]any{
 		"request_id": "r4",
@@ -193,7 +193,7 @@ func TestShimDefaultsToRequestType(t *testing.T) {
 // Different request IDs maintain independent quorums
 func TestShimIndependentQuorumsPerRequestID(t *testing.T) {
 	batcherCh := make(chan map[string]any, 16)
-	shim := NewShim("shim", batcherCh, nil, nil)
+	shim := NewShim("shim", batcherCh, nil, nil, 2)
 
 	shim.HandleRequestMessage(map[string]any{
 		"type":       "request",
@@ -232,7 +232,7 @@ func TestShimIndependentQuorumsPerRequestID(t *testing.T) {
 // Interleaved senders across requests still forward each at quorum
 func TestShimInterleavedSendersAcrossRequests(t *testing.T) {
 	batcherCh := make(chan map[string]any, 16)
-	shim := NewShim("shim", batcherCh, nil, nil)
+	shim := NewShim("shim", batcherCh, nil, nil, 2)
 
 	shim.HandleRequestMessage(map[string]any{
 		"type":       "request",
@@ -270,7 +270,7 @@ func TestShimInterleavedSendersAcrossRequests(t *testing.T) {
 func TestShimForwardsNestedResponseAfterQuorum(t *testing.T) {
 	batcherCh := make(chan map[string]any, 16)
 	execCh := make(chan map[string]any, 16)
-	shim := NewShim("shim", batcherCh, execCh, nil)
+	shim := NewShim("shim", batcherCh, execCh, nil, 2)
 
 	first := shim.HandleIncomingResponse(map[string]any{
 		"type":       "response",

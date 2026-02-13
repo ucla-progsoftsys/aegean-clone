@@ -28,7 +28,7 @@ type Server struct {
 	execToShim     chan map[string]any
 }
 
-func NewServer(name, host string, port int, clients []string, verifiers []string, peers []string, execs []string, isPrimaryBatcher bool, executeRequest exec.ExecuteRequestFunc) *Server {
+func NewServer(name, host string, port int, clients []string, verifiers []string, peers []string, execs []string, isPrimaryBatcher bool, shimQuorumSize int, verifyResponseQuorumSize int, execVerifyQuorumSize int, phaseQuorumSize int, expectedExecVotes int, executeRequest exec.ExecuteRequestFunc) *Server {
 	// Buffered channels to decouple component work
 	shimToBatcher := make(chan map[string]any, 256)
 	batcherToMixer := make(chan map[string]any, 256)
@@ -51,11 +51,11 @@ func NewServer(name, host string, port int, clients []string, verifiers []string
 	}
 
 	// Init each component
-	server.Shim = shim.NewShim(name, shimToBatcher, shimToExec, clients)
+	server.Shim = shim.NewShim(name, shimToBatcher, shimToExec, clients, shimQuorumSize)
 	server.Batcher = batcher.NewBatcher(name, batcherToMixer, execs, isPrimaryBatcher)
 	server.Mixer = mixer.NewMixer(name, mixerToExec)
-	server.Exec = exec.NewExec(name, verifiers, peers, execToVerifier, execToShim, executeRequest)
-	server.Verifier = verifier.NewVerifier(name, verifiers, execs, verifierToExec)
+	server.Exec = exec.NewExec(name, verifiers, peers, execToVerifier, execToShim, verifyResponseQuorumSize, executeRequest)
+	server.Verifier = verifier.NewVerifier(name, verifiers, execs, verifierToExec, execVerifyQuorumSize, phaseQuorumSize, expectedExecVotes)
 
 	server.Node.HandleMessage = server.HandleMessage
 	return server

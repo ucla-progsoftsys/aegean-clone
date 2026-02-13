@@ -14,12 +14,10 @@ type Verifier struct {
 	Execs     []string
 	// Local component channel
 	ExecCh chan<- map[string]any
-	// Hard-coded for now per user request.
-	u int
-	r int
 	// Quorum sizes.
-	execVerifyQuorum int
-	phaseQuorum      int
+	execVerifyQuorum  int
+	phaseQuorum       int
+	expectedExecVotes int
 	// Current verifier view.
 	view int
 	// State tracking per sequence number.
@@ -50,7 +48,7 @@ type verifySlot struct {
 	committedToken   string
 }
 
-func NewVerifier(name string, verifiers []string, execs []string, execCh chan<- map[string]any) *Verifier {
+func NewVerifier(name string, verifiers []string, execs []string, execCh chan<- map[string]any, execVerifyQuorumSize int, phaseQuorumSize int, expectedExecVotes int) *Verifier {
 	if execCh == nil {
 		log.Fatalf("verifier component requires non-nil execCh")
 	}
@@ -59,8 +57,9 @@ func NewVerifier(name string, verifiers []string, execs []string, execCh chan<- 
 		Verifiers:         verifiers,
 		Execs:             execs,
 		ExecCh:            execCh,
-		u:                 1,
-		r:                 0,
+		execVerifyQuorum:  execVerifyQuorumSize,
+		phaseQuorum:       phaseQuorumSize,
+		expectedExecVotes: expectedExecVotes,
 		slots:             make(map[int]*verifySlot),
 		committed:         make(map[int]string),
 		verifyBuffer:      common.NewMultiOOOBuffer[map[string]any](),
@@ -68,8 +67,6 @@ func NewVerifier(name string, verifiers []string, execs []string, execCh chan<- 
 		viewTimers:        make(map[int]*time.Timer),
 		viewChangeRounds:  make(map[int]*viewChangeRound),
 	}
-	v.execVerifyQuorum = common.MaxInt(v.u, v.r) + 1
-	v.phaseQuorum = v.u + v.r + 1 // nV-u where nV=2u+r+1
 	return v
 }
 
@@ -194,15 +191,6 @@ func parseView(payload map[string]any) (int, bool) {
 		return 0, false
 	}
 	return view, true
-}
-
-func (v *Verifier) isKnownExec(execID string) bool {
-	for _, exec := range v.Execs {
-		if exec == execID {
-			return true
-		}
-	}
-	return false
 }
 
 func verifyVoteStats(votes map[string]map[string]struct{}) (int, int) {

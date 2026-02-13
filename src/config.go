@@ -7,16 +7,21 @@ import (
 )
 
 type NodeConfig struct {
-	Type             string   `json:"type"`
-	Next             []string `json:"next"`
-	Clients          []string `json:"clients"`
-	Shim             string   `json:"shim"`
-	Verifiers        []string `json:"verifiers"`
-	Peers            []string `json:"peers"`
-	Execs            []string `json:"execs"`
-	IsPrimaryBatcher bool     `json:"is_primary_batcher"`
-	ExecWorkflow     string   `json:"exec_workflow"`
-	ClientWorkflow   string   `json:"client_workflow"`
+	Type                      string   `json:"type"`
+	Next                      []string `json:"next"`
+	Clients                   []string `json:"clients"`
+	Shim                      string   `json:"shim"`
+	Verifiers                 []string `json:"verifiers"`
+	Peers                     []string `json:"peers"`
+	Execs                     []string `json:"execs"`
+	IsPrimaryBatcher          bool     `json:"is_primary_batcher"`
+	ExecWorkflow              string   `json:"exec_workflow"`
+	ClientWorkflow            string   `json:"client_workflow"`
+	ShimQuorumSize            int      `json:"shimQuorumSize"`
+	VerifyResponseQuorumSize  int      `json:"verifyResponseQuorumSize"`
+	ExecVerifyQuorumSize      int      `json:"execVerifyQuorumSize"`
+	PhaseQuorumSize           int      `json:"phaseQuorumSize"`
+	ExpectedExecVotes         int      `json:"expectedExecVotes"`
 }
 
 const configPath = "../experiment/architecture/aegean.json"

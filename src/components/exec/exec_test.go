@@ -94,7 +94,7 @@ func makeParallelBatches(requests ...map[string]any) [][]map[string]any {
 func newTestExec(name string, verifiers []string, peers []string) (*Exec, chan map[string]any, chan map[string]any) {
 	verifierCh := make(chan map[string]any, 64)
 	shimCh := make(chan map[string]any, 64)
-	exec := NewExec(name, verifiers, peers, verifierCh, shimCh, testExecuteRequest)
+	exec := NewExec(name, verifiers, peers, verifierCh, shimCh, 1, testExecuteRequest)
 	return exec, verifierCh, shimCh
 }
 
@@ -603,7 +603,7 @@ func TestExecRollbackReplaysUncommittedBatch(t *testing.T) {
 	verifierCh := make(chan map[string]any, 8)
 	shimCh := make(chan map[string]any, 8)
 	runCount := 0
-	exec := NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh,
+	exec := NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh, 1,
 		func(_ *Exec, request map[string]any, _ int64, _ float64) map[string]any {
 			runCount++
 			return map[string]any{"request_id": request["request_id"], "status": "ok"}
@@ -717,7 +717,7 @@ func TestExecBlockedRequestResumesAfterNestedResponse(t *testing.T) {
 	verifierCh := make(chan map[string]any, 8)
 	shimCh := make(chan map[string]any, 8)
 	var exec *Exec
-	exec = NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh,
+	exec = NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh, 1,
 		func(_ *Exec, request map[string]any, _ int64, _ float64) map[string]any {
 			if nested, ok := exec.ConsumeNestedResponse(request["request_id"]); ok && nested != nil {
 				return map[string]any{
@@ -774,7 +774,7 @@ func TestExecParallelBatchesYieldBlockedToNext(t *testing.T) {
 	verifierCh := make(chan map[string]any, 8)
 	shimCh := make(chan map[string]any, 8)
 	var exec *Exec
-	exec = NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh,
+	exec = NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh, 1,
 		func(_ *Exec, request map[string]any, _ int64, _ float64) map[string]any {
 			op, _ := request["op"].(string)
 			requestID := request["request_id"]
@@ -835,7 +835,7 @@ func TestExecParallelBatchWindowGatesByStableSeq(t *testing.T) {
 	verifierCh := make(chan map[string]any, 8)
 	shimCh := make(chan map[string]any, 8)
 	var exec *Exec
-	exec = NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh,
+	exec = NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh, 1,
 		func(_ *Exec, request map[string]any, _ int64, _ float64) map[string]any {
 			op, _ := request["op"].(string)
 			requestID := request["request_id"]
@@ -907,7 +907,7 @@ func TestExecParallelBatchSchedulingDeterministic(t *testing.T) {
 	var mu sync.Mutex
 	trace := make([]string, 0, 8)
 	var exec *Exec
-	exec = NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh,
+	exec = NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh, 1,
 		func(_ *Exec, request map[string]any, _ int64, _ float64) map[string]any {
 			requestID, _ := request["request_id"].(string)
 			mu.Lock()
@@ -969,7 +969,7 @@ func TestExecForceSequentialDisablesParallelYield(t *testing.T) {
 	verifierCh := make(chan map[string]any, 8)
 	shimCh := make(chan map[string]any, 8)
 	var exec *Exec
-	exec = NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh,
+	exec = NewExec("exec1", []string{"exec1"}, nil, verifierCh, shimCh, 1,
 		func(_ *Exec, request map[string]any, _ int64, _ float64) map[string]any {
 			op, _ := request["op"].(string)
 			requestID := request["request_id"]

@@ -79,7 +79,7 @@ func (v *Verifier) applyVerifyMessage(payload map[string]any) map[string]any {
 	count := addVote(slot.verifyVotes, token, execID)
 	if count < v.execVerifyQuorum {
 		maxVotes, uniqueExecSenders := verifyVoteStats(slot.verifyVotes)
-		expectedExecVotes := 2*v.u + v.r + 1
+		expectedExecVotes := v.expectedExecVotes
 		if uniqueExecSenders >= expectedExecVotes && maxVotes < v.execVerifyQuorum {
 			// All expected exec replies arrived, but no token can reach quorum.
 			// Trigger immediate no-agreement instead of waiting for timeout.

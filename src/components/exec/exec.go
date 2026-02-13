@@ -59,9 +59,6 @@ type Exec struct {
 	replayableBatchInputs map[int]map[string]any
 	// Sequential execution flag (set after rollback)
 	forceSequential bool
-	// Hard-coded fault parameters for now.
-	u int
-	r int
 	// Current execution view.
 	view int
 	// Quorum + dedupe for verify responses from verifiers.
@@ -84,7 +81,7 @@ type Exec struct {
 	ExecuteRequest ExecuteRequestFunc
 }
 
-func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- map[string]any, shimCh chan<- map[string]any, executeRequest ExecuteRequestFunc) *Exec {
+func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- map[string]any, shimCh chan<- map[string]any, verifyResponseQuorumSize int, executeRequest ExecuteRequestFunc) *Exec {
 	if verifierCh == nil || shimCh == nil {
 		log.Fatalf("exec component requires non-nil channels")
 	}
@@ -120,8 +117,6 @@ func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- 
 		workingState:          working,
 		pendingExecResults:    make(map[int]pendingExecResult),
 		replayableBatchInputs: make(map[int]map[string]any),
-		u:                     1,
-		r:                     0,
 		view:                  1,
 		verifyResponseBySeq:   make(map[int]map[string]struct{}),
 		checkpoints:           make(map[int]rollbackCheckpoint),
@@ -133,7 +128,7 @@ func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- 
 		nextVerifySeq:         1,
 		workerCount:           4,
 	}
-	exec.verifyResponseQuorum = common.NewQuorumHelper(exec.r + 1)
+	exec.verifyResponseQuorum = common.NewQuorumHelper(verifyResponseQuorumSize)
 	exec.storeCheckpoint(0, stable.PrevHash, stable.Merkle, stable.MerkleRoot)
 	exec.scheduler = newExecScheduler()
 	return exec

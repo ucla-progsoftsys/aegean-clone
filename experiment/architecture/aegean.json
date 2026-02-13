@@ -21,7 +21,12 @@
     "execs": ["node4", "node5", "node6"],
     "peers": ["node5", "node6"],
     "is_primary_batcher": true,
-    "exec_workflow": "middle"
+    "exec_workflow": "middle",
+    "shimQuorumSize": 2,
+    "verifyResponseQuorumSize": 1,
+    "execVerifyQuorumSize": 2,
+    "phaseQuorumSize": 2,
+    "expectedExecVotes": 3
   },
   "node5": {
     "type": "server",
@@ -30,7 +35,12 @@
     "execs": ["node4", "node5", "node6"],
     "peers": ["node4", "node6"],
     "is_primary_batcher": false,
-    "exec_workflow": "middle"
+    "exec_workflow": "middle",
+    "shimQuorumSize": 2,
+    "verifyResponseQuorumSize": 1,
+    "execVerifyQuorumSize": 2,
+    "phaseQuorumSize": 2,
+    "expectedExecVotes": 3
   },
   "node6": {
     "type": "server",
@@ -39,7 +49,12 @@
     "execs": ["node4", "node5", "node6"],
     "peers": ["node4", "node5"],
     "is_primary_batcher": false,
-    "exec_workflow": "middle"
+    "exec_workflow": "middle",
+    "shimQuorumSize": 2,
+    "verifyResponseQuorumSize": 1,
+    "execVerifyQuorumSize": 2,
+    "phaseQuorumSize": 2,
+    "expectedExecVotes": 3
   },
   "node7": {
     "type": "server",
@@ -48,7 +63,12 @@
     "execs": ["node7", "node8", "node9"],
     "peers": ["node8", "node9"],
     "is_primary_batcher": true,
-    "exec_workflow": "backend"
+    "exec_workflow": "backend",
+    "shimQuorumSize": 2,
+    "verifyResponseQuorumSize": 1,
+    "execVerifyQuorumSize": 2,
+    "phaseQuorumSize": 2,
+    "expectedExecVotes": 3
   },
   "node8": {
     "type": "server",
@@ -57,7 +77,12 @@
     "execs": ["node7", "node8", "node9"],
     "peers": ["node7", "node9"],
     "is_primary_batcher": false,
-    "exec_workflow": "backend"
+    "exec_workflow": "backend",
+    "shimQuorumSize": 2,
+    "verifyResponseQuorumSize": 1,
+    "execVerifyQuorumSize": 2,
+    "phaseQuorumSize": 2,
+    "expectedExecVotes": 3
   },
   "node9": {
     "type": "server",
@@ -66,6 +91,11 @@
     "execs": ["node7", "node8", "node9"],
     "peers": ["node7", "node8"],
     "is_primary_batcher": false,
-    "exec_workflow": "backend"
+    "exec_workflow": "backend",
+    "shimQuorumSize": 2,
+    "verifyResponseQuorumSize": 1,
+    "execVerifyQuorumSize": 2,
+    "phaseQuorumSize": 2,
+    "expectedExecVotes": 3
   }
 }

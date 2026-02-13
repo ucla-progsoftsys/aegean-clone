@@ -66,7 +66,7 @@ func expectMessage(t *testing.T, ch <-chan map[string]any, predicate func(map[st
 
 func TestVerifierPreprepareThreshold(t *testing.T) {
 	execCh := make(chan map[string]any, 16)
-	v := NewVerifier("v1", []string{"v1", "v1"}, []string{"e1", "e2"}, execCh)
+	v := NewVerifier("v1", []string{"v1", "v1"}, []string{"e1", "e2"}, execCh, 2, 2, 3)
 
 	first := v.HandleVerifyMessage(map[string]any{
 		"type":      "verify",
@@ -95,7 +95,7 @@ func TestVerifierPreprepareThreshold(t *testing.T) {
 
 func TestVerifierPrepareCommitSendsVerifyResponse(t *testing.T) {
 	execCh := make(chan map[string]any, 16)
-	v := NewVerifier("127.0.0.1", []string{"127.0.0.1", "127.0.0.1"}, []string{"127.0.0.1"}, execCh)
+	v := NewVerifier("127.0.0.1", []string{"127.0.0.1", "127.0.0.1"}, []string{"127.0.0.1"}, execCh, 2, 2, 3)
 
 	// Reach preprepare from exec verifies.
 	v.HandleVerifyMessage(map[string]any{
@@ -150,7 +150,7 @@ func TestVerifierPrepareCommitSendsVerifyResponse(t *testing.T) {
 
 func TestVerifierTimeoutTriggersViewChangeResponse(t *testing.T) {
 	execCh := make(chan map[string]any, 16)
-	v := NewVerifier("127.0.0.1", []string{"127.0.0.1", "127.0.0.1"}, []string{"127.0.0.1"}, execCh)
+	v := NewVerifier("127.0.0.1", []string{"127.0.0.1", "127.0.0.1"}, []string{"127.0.0.1"}, execCh, 2, 2, 3)
 	v.viewChangeTimeout = 50 * time.Millisecond
 
 	// One verify is below preprepare threshold, should timeout to no-agreement.
@@ -192,7 +192,7 @@ func TestVerifierTimeoutTriggersViewChangeResponse(t *testing.T) {
 
 func TestVerifierFastNoAgreementWhenAllExecVotesDiffer(t *testing.T) {
 	execCh := make(chan map[string]any, 16)
-	v := NewVerifier("127.0.0.1", []string{"127.0.0.1", "127.0.0.1"}, []string{"127.0.0.1"}, execCh)
+	v := NewVerifier("127.0.0.1", []string{"127.0.0.1", "127.0.0.1"}, []string{"127.0.0.1"}, execCh, 2, 2, 3)
 	v.viewChangeTimeout = 5 * time.Second // Ensure test hits fast-path, not timeout.
 
 	_ = v.HandleVerifyMessage(map[string]any{
