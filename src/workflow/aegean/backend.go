@@ -1,0 +1,97 @@
+package aegeanworkflow
+
+import (
+	"log"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"aegean/common"
+	"aegean/components/exec"
+)
+
+var divNodeCounters sync.Map
+
+func shouldDiverge(nodeName string, targetNodes map[string]struct{}, everyN uint64) bool {
+	// nil targetNodes means all nodes are targeted
+	if targetNodes != nil {
+		if _, targeted := targetNodes[nodeName]; !targeted {
+			return false
+		}
+	}
+	// everyN <= 1 means always diverge
+	if everyN <= 1 {
+		return true
+	}
+	counterAny, _ := divNodeCounters.LoadOrStore(nodeName, &atomic.Uint64{})
+	counter := counterAny.(*atomic.Uint64)
+	requestCount := counter.Add(1)
+	return requestCount%everyN == 0
+}
+
+func executeRequestBase(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64, targetNodes map[string]struct{}, everyN uint64) map[string]any {
+	requestID := request["request_id"]
+	op, _ := request["op"].(string)
+	opPayload, _ := request["op_payload"].(map[string]any)
+	injectDivergence := shouldDiverge(e.Name, targetNodes, everyN)
+
+	// Execute a single request and return the response
+	response := map[string]any{"request_id": requestID}
+
+	switch op {
+	case "spin_write_read":
+		spinTime := common.GetFloat(opPayload, "spin_time")
+		writeKey := common.GetString(opPayload, "write_key")
+		writeValue := common.GetString(opPayload, "write_value")
+		readKey := common.GetString(opPayload, "read_key")
+
+		// Spin for the given time
+		if spinTime > 0 {
+			time.Sleep(time.Duration(spinTime * float64(time.Second)))
+		}
+
+		if injectDivergence {
+			writeKey = writeKey + "_divergent_" + e.Name
+			writeValue = writeValue + "_divergent_" + e.Name
+			log.Printf("%s: injecting artificial divergence on request %v (write_key=%q write_value=%q)", e.Name, requestID, writeKey, writeValue)
+		}
+
+		// Write to key
+		e.WriteKV(writeKey, writeValue)
+		// Read from key
+		response["read_value"] = e.ReadKV(readKey)
+		response["status"] = "ok"
+	default:
+		response["status"] = "error"
+		response["error"] = "Unknown op: " + op
+	}
+
+	_ = ndSeed
+	_ = ndTimestamp
+	return response
+}
+
+func ExecuteRequestBackend(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+	return executeRequestBase(e, request, ndSeed, ndTimestamp, map[string]struct{}{}, 0)
+}
+
+func ExecuteRequestBackendDivergeOneNode(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+	return executeRequestBase(e, request, ndSeed, ndTimestamp, map[string]struct{}{
+		"node7": {},
+	}, 4)
+}
+
+func ExecuteRequestBackendDivergeTwoNode(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+	return executeRequestBase(e, request, ndSeed, ndTimestamp, map[string]struct{}{
+		"node7": {},
+		"node8": {},
+	}, 4)
+}
+
+func ExecuteRequestBackendDivergeThreeNode(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+	return executeRequestBase(e, request, ndSeed, ndTimestamp, map[string]struct{}{
+		"node7": {},
+		"node8": {},
+		"node9": {},
+	}, 4)
+}
