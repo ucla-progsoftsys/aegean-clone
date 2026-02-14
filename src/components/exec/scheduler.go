@@ -19,7 +19,8 @@ func newExecScheduler() *execScheduler {
 		nestedResponses:  make(map[string][]map[string]any),
 		nestedReadyCh:    make(chan struct{}, 1),
 		contextStore:     newRequestContextStore(),
-		parallelWindowK:  4,
+		// Tunable
+		parallelWindowK: 4,
 	}
 }
 

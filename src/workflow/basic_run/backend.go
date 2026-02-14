@@ -85,7 +85,7 @@ func ExecuteRequestBackendDivergeTwoNode(e *exec.Exec, request map[string]any, n
 	return executeRequestBase(e, request, ndSeed, ndTimestamp, map[string]struct{}{
 		"node5": {},
 		"node6": {},
-	}, 4)
+	}, 5)
 }
 
 func ExecuteRequestBackendDivergeThreeNode(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
@@ -93,5 +93,5 @@ func ExecuteRequestBackendDivergeThreeNode(e *exec.Exec, request map[string]any,
 		"node5": {},
 		"node6": {},
 		"node7": {},
-	}, 4)
+	}, 5)
 }

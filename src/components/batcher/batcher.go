@@ -30,11 +30,12 @@ func NewBatcher(name string, nextCh chan<- map[string]any, execs []string, isPri
 		log.Fatalf("batcher component requires non-nil nextCh")
 	}
 	b := &Batcher{
-		Name:          name,
-		NextCh:        nextCh,
-		Execs:         execs,
-		isPrimary:     isPrimary,
-		batch:         []map[string]any{},
+		Name:      name,
+		NextCh:    nextCh,
+		Execs:     execs,
+		isPrimary: isPrimary,
+		batch:     []map[string]any{},
+		// Tunable
 		batchSize:     10,
 		batchTimeout:  10 * time.Millisecond,
 		lastBatchTime: time.Now(),

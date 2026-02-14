@@ -78,7 +78,7 @@ func ExecuteRequestMiddleDivergeTwoNode(e *exec.Exec, request map[string]any, nd
 	return executeFanoutBase(e, request, ndSeed, ndTimestamp, map[string]struct{}{
 		"node2": {},
 		"node3": {},
-	}, 4)
+	}, 5)
 }
 
 func ExecuteRequestMiddleDivergeThreeNode(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
@@ -86,7 +86,7 @@ func ExecuteRequestMiddleDivergeThreeNode(e *exec.Exec, request map[string]any, 
 		"node2": {},
 		"node3": {},
 		"node4": {},
-	}, 4)
+	}, 5)
 }
 
 func processNestedFanoutResponse(e *exec.Exec, requestID any, nested map[string]any) (bool, map[string]any) {

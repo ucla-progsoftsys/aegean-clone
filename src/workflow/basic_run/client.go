@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	writeKeyMod = 10
-	readKeyMod  = 10
+	writeKeyMod = 1000
+	readKeyMod  = 1000
 )
 
 func ClientRequestLogicPipelined(c *nodes.Client) {
@@ -28,7 +28,7 @@ func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
 
 	logger := nodes.GetClientLogger()
 
-	for requestID := 1; requestID <= 100; requestID++ {
+	for requestID := 1; requestID <= 1000; requestID++ {
 		timestamp := float64(time.Now().UnixNano()) / 1e9
 
 		request := map[string]any{
@@ -37,7 +37,7 @@ func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
 			"sender":     c.Name,
 			"op":         "spin_write_read",
 			"op_payload": map[string]any{
-				"spin_time":   0.1,
+				"spin_time":   0.01,
 				"write_key":   strconv.Itoa(requestID % writeKeyMod),
 				"write_value": "value_" + strconv.Itoa(requestID),
 				"read_key":    strconv.Itoa(requestID % readKeyMod),
