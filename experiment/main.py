@@ -1,5 +1,8 @@
+import argparse
+import json
 import logging
 import os
+import shlex
 import subprocess
 import time
 from datetime import datetime
@@ -9,6 +12,32 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def load_experiment_topology(config_path):
+    with open(config_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    services = data.get("services", {})
+    nodes = data.get("nodes", {})
+    if not services or not nodes:
+        raise ValueError("config must include non-empty 'services' and 'nodes'")
+
+    node_names = sorted(nodes.keys())
+    client_names = []
+    for node_name, node_cfg in nodes.items():
+        service_name = node_cfg.get("service")
+        if not service_name:
+            raise ValueError(f"node {node_name} is missing 'service'")
+
+        service_cfg = services.get(service_name)
+        if not service_cfg:
+            raise ValueError(f"node {node_name} references unknown service '{service_name}'")
+
+        if service_cfg.get("type") == "client":
+            client_names.append(node_name)
+
+    return node_names, sorted(client_names)
 
 
 def collect_logs(node_names, client_names, results_dir="experiment/results"):
@@ -32,12 +61,14 @@ def collect_logs(node_names, client_names, results_dir="experiment/results"):
         _scp(name, "/tmp/client_result.jsonl", local_path)
     logger.info("Log collection complete: %s", run_dir)
 
-def launch_nodes(node_names):
+def launch_nodes(node_names, config_path):
     logger.info("Launching %d nodes", len(node_names))
+    remote_config_path = f"../{config_path}"
+    quoted_config_path = shlex.quote(remote_config_path)
     for name in node_names:
         subprocess.run(["ssh", name, "sh", "-lc",
                         "'cd /app/src && "
-                        f"nohup go run . --name {name} --host 0.0.0.0 --port 8000 "
+                        f"nohup go run . --name {name} --host 0.0.0.0 --port 8000 --config {quoted_config_path} "
                         "> /tmp/node.log 2>&1 &'"])
 
 def stop_docker_nodes(node_names):
@@ -47,12 +78,15 @@ def stop_docker_nodes(node_names):
 
 
 def main():
-    node_names = [f"node{i}" for i in range(1, 8)]
-    client_names = [f"node{i}" for i in range(1, 2)]
+    parser = argparse.ArgumentParser(description="Run Aegean experiment")
+    parser.add_argument("config_path", help="Path to architecture config JSON")
+    args = parser.parse_args()
+
+    node_names, client_names = load_experiment_topology(args.config_path)
     logger.info("Experiment starting")
     stop_docker_nodes(node_names)
 
-    launch_nodes(node_names)
+    launch_nodes(node_names, args.config_path)
     logger.info("Waiting for nodes to run")
     time.sleep(30.0)
 

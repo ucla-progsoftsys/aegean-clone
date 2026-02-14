@@ -17,13 +17,14 @@ func main() {
 	name := flag.String("name", "", "node name")
 	host := flag.String("host", "", "host to bind")
 	port := flag.Int("port", 0, "port to bind")
+	config := flag.String("config", "", "path to architecture config file")
 	flag.Parse()
 
-	if *name == "" || *host == "" || *port == 0 {
-		log.Fatal("missing required flags: --name, --host, --port")
+	if *name == "" || *host == "" || *port == 0 || *config == "" {
+		log.Fatal("missing required flags: --name, --host, --port, --config")
 	}
 
-	configs, err := loadConfig(configPath)
+	configs, err := loadConfig(*config)
 	if err != nil {
 		log.Fatal(err)
 	}

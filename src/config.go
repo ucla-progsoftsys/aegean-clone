@@ -23,8 +23,6 @@ type NodeConfig struct {
 	ExpectedExecVotes        int      `json:"expectedExecVotes"`
 }
 
-const configPath = "../experiment/architecture/aegean.json"
-
 func loadConfig(path string) (map[string]NodeConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
