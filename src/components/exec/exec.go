@@ -227,9 +227,9 @@ func (e *Exec) ConsumeNestedResponse(requestID any) (map[string]any, bool) {
 func (e *Exec) HandleBatchMessage(payload map[string]any) map[string]any {
 	log.Printf("Handler called on %s with payload: %v", e.Name, payload)
 	seqNum := common.GetInt(payload, "seq_num")
-	e.batchBuffer.Add(seqNum, payload)
 	e.processMu.Lock()
 	defer e.processMu.Unlock()
+	e.batchBuffer.Add(seqNum, payload)
 	for {
 		progressed := false
 		if e.flushNextBatch() {

@@ -367,6 +367,43 @@ func TestExecBuffersOutOfOrderBatches(t *testing.T) {
 
 }
 
+// While state transfer is in-flight (processMu held), incoming batches should not be
+// enqueued early and then lost by transfer-time buffer clearing.
+func TestExecHandleBatchDoesNotLoseBatchWhenProcessMuHeld(t *testing.T) {
+	exec, _, _ := newTestExec("exec1", []string{"exec1"}, nil)
+	batch := map[string]any{
+		"type":    "batch",
+		"seq_num": 1,
+		"parallel_batches": makeParallelBatches(
+			makeSpinRequest("r1", "k1", "v1", "1"),
+		),
+	}
+
+	exec.processMu.Lock()
+	done := make(chan map[string]any, 1)
+	go func() {
+		done <- exec.HandleBatchMessage(batch)
+	}()
+
+	// Simulate transfer logic clearing the batch buffer while processing is stalled.
+	time.Sleep(10 * time.Millisecond)
+	exec.batchBuffer.Clear()
+	exec.processMu.Unlock()
+
+	select {
+	case resp := <-done:
+		if resp["status"] != "buffered" {
+			t.Fatalf("expected buffered status, got %v", resp["status"])
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatalf("timed out waiting for HandleBatchMessage")
+	}
+
+	if _, ok := exec.pendingExecResults[1]; !ok {
+		t.Fatalf("expected seq 1 pending result to survive transfer-time clear window")
+	}
+}
+
 // Verify responses arriving before their batches are buffered and flushed later
 func TestExecBuffersVerifyBeforeBatch(t *testing.T) {
 	ts := startTestServer(t, func(req map[string]any) map[string]any {
