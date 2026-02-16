@@ -88,7 +88,7 @@ func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- 
 	if executeRequest == nil {
 		log.Fatalf("exec component requires ExecuteRequest")
 	}
-	initialKV := map[string]string{"1": "111"}
+	initialKV := map[string]string{}
 	initialMerkle := NewMerkleTreeFromMap(initialKV)
 	stable := State{
 		KVStore:    common.CopyStringMap(initialKV),
