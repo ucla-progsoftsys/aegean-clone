@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+const (
+	injectNetworkDelay = true
+	injectChannelDelay = true
+)
+
 // Server combines shim, mixer, exec, and verifier into one node
 type Server struct {
 	*Node
@@ -78,41 +83,62 @@ func (s *Server) Start() {
 	// Wire component loops
 	go func() {
 		for msg := range s.shimToBatcher {
+			if injectChannelDelay {
+				time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
+			}
 			s.Batcher.HandleRequestMessage(msg)
 		}
 	}()
 
 	go func() {
+		if injectChannelDelay {
+			time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
+		}
 		for msg := range s.batcherToMixer {
 			s.Mixer.HandleBatchMessage(msg)
 		}
 	}()
 
 	go func() {
+		if injectChannelDelay {
+			time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
+		}
 		for msg := range s.mixerToExec {
 			s.Exec.HandleBatchMessage(msg)
 		}
 	}()
 
 	go func() {
+		if injectChannelDelay {
+			time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
+		}
 		for msg := range s.shimToExec {
 			_ = s.Exec.BufferNestedResponse(msg)
 		}
 	}()
 
 	go func() {
+		if injectChannelDelay {
+			time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
+		}
 		for msg := range s.execToVerifier {
 			s.Verifier.HandleVerifyMessage(msg)
 		}
 	}()
 
 	go func() {
+		if injectChannelDelay {
+			time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
+		}
 		for msg := range s.verifierToExec {
 			s.Exec.HandleVerifyResponseMessage(msg)
 		}
 	}()
 
 	go func() {
+		if injectChannelDelay {
+			time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
+		}
 		for msg := range s.execToShim {
 			s.Shim.HandleOutgoingResponse(msg)
 		}
@@ -131,7 +157,9 @@ func (s *Server) HandleMessage(payload map[string]any) map[string]any {
 		return s.Shim.HandleRequestMessage(payload)
 	}
 
-	time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
+	if injectNetworkDelay {
+		time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
+	}
 	switch msgType {
 	case "response":
 		return s.Shim.HandleIncomingResponse(payload)
