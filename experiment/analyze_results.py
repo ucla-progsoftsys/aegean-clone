@@ -107,17 +107,34 @@ def analyze_trace(path):
                 count_mismatches.append((req_id, entry))
 
     latencies = []
+    request_timestamps = []
+    response_timestamps = []
     for req_id, entry in by_id.items():
         req_ts = None
         resp_ts = None
         if entry["requests"]:
             req_ts = min(filter(lambda x: x is not None, (parse_ts(r) for r in entry["requests"])), default=None)
+            if req_ts is not None:
+                request_timestamps.append(req_ts)
         if entry["responses"]:
             resp_ts = min(filter(lambda x: x is not None, (parse_ts(r) for r in entry["responses"])), default=None)
+            resp_max_ts = max(filter(lambda x: x is not None, (parse_ts(r) for r in entry["responses"])), default=None)
+            if resp_max_ts is not None:
+                response_timestamps.append(resp_max_ts)
         if req_ts is not None and resp_ts is not None:
             latency = resp_ts - req_ts
             if latency >= 0:
                 latencies.append(latency)
+
+    total_time = None
+    throughput = None
+    unique_request_count = len(by_id)
+    if request_timestamps and response_timestamps:
+        start_ts = min(request_timestamps)
+        end_ts = max(response_timestamps)
+        if end_ts > start_ts:
+            total_time = end_ts - start_ts
+            throughput = unique_request_count / total_time
 
     return {
         "requests": requests,
@@ -125,6 +142,9 @@ def analyze_trace(path):
         "mismatches": mismatches,
         "count_mismatches": count_mismatches,
         "latencies": latencies,
+        "total_time": total_time,
+        "throughput": throughput,
+        "unique_request_count": unique_request_count,
     }
 
 
@@ -191,6 +211,14 @@ def main():
             )
         else:
             print("Latency: n/a")
+
+        if result["throughput"] is not None and result["total_time"] is not None:
+            print(
+                "Throughput (requests/second): "
+                f"{result['throughput']:.3f} ({result['unique_request_count']} requests / {result['total_time']:.6f}s)"
+            )
+        else:
+            print("Throughput: n/a")
 
         print("")
 
