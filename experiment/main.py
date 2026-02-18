@@ -77,6 +77,99 @@ def stop_docker_nodes(node_names):
         subprocess.run(["ssh", name, "pkill -9 -f 'go'"])
 
 
+def get_client_progress(client_name):
+    result = subprocess.run(
+        [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "LogLevel=ERROR",
+            client_name,
+            "curl",
+            "-sS",
+            "-X",
+            "POST",
+            "http://127.0.0.1:8000/progress",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or f"ssh/curl failed for {client_name}")
+
+    payload = json.loads(result.stdout or "{}")
+    progress = float(payload.get("progress", 0.0))
+    finished = bool(payload.get("finished", False))
+    return progress, finished
+
+
+def wait_for_clients_progress(client_names, poll_interval=1.0, stall_timeout=30.0, startup_timeout=90.0):
+    if not client_names:
+        return True
+
+    last_progress_total = None
+    last_progress_change = time.monotonic()
+    start_time = time.monotonic()
+    seen_client = {name: False for name in client_names}
+
+    while True:
+        snapshots = {}
+        for name in client_names:
+            try:
+                snapshots[name] = get_client_progress(name)
+                seen_client[name] = True
+            except Exception as exc:  # noqa: BLE001
+                elapsed = time.monotonic() - start_time
+                if elapsed > startup_timeout:
+                    logger.warning("Failed to read progress from %s: %s", name, exc)
+                else:
+                    logger.info(
+                        "Client %s not reachable yet (startup %.1fs/%.1fs): %s",
+                        name,
+                        elapsed,
+                        startup_timeout,
+                        exc,
+                    )
+                snapshots[name] = (0.0, False)
+
+        progress_total = sum(progress for progress, _ in snapshots.values())
+        all_finished = all(finished for _, finished in snapshots.values())
+        all_seen = all(seen_client.values())
+
+        if all_finished:
+            return True
+
+        # Do not treat startup connection failures as progress stalls.
+        if not all_seen:
+            if time.monotonic() - start_time > startup_timeout:
+                missing = [name for name, seen in seen_client.items() if not seen]
+                logger.warning(
+                    "Startup timeout after %.1fs; never received /progress from %s",
+                    startup_timeout,
+                    ", ".join(missing),
+                )
+                return False
+            time.sleep(poll_interval)
+            continue
+
+        if last_progress_total is None or progress_total != last_progress_total:
+            last_progress_total = progress_total
+            last_progress_change = time.monotonic()
+        elif time.monotonic() - last_progress_change > stall_timeout:
+            logger.warning(
+                "Progress stalled for over %.1fs (total_progress=%.3f)",
+                stall_timeout,
+                progress_total,
+            )
+            return False
+
+        time.sleep(poll_interval)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run Aegean experiment")
     parser.add_argument("config_path", help="Path to architecture config JSON")
@@ -87,8 +180,15 @@ def main():
     stop_docker_nodes(node_names)
 
     launch_nodes(node_names, args.config_path)
-    logger.info("Waiting for nodes to run")
-    time.sleep(90.0)
+    logger.info("Waiting for client completion")
+    completed = wait_for_clients_progress(
+        client_names,
+        poll_interval=1.0,
+        stall_timeout=30.0,
+        startup_timeout=90.0,
+    )
+    if not completed:
+        logger.warning("Proceeding after progress timeout")
 
     stop_docker_nodes(node_names)
     collect_logs(node_names, client_names)

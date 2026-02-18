@@ -17,6 +17,8 @@ type Node struct {
 
 	// HandleMessage must be set by embedding types to process requests.
 	HandleMessage common.MessageHandler
+	// HandleProgress is mounted on /progress and mirrors HandleMessage semantics.
+	HandleProgress common.MessageHandler
 }
 
 func NewNode(name, host string, port int) *Node {
@@ -41,8 +43,13 @@ func (n *Node) Start() {
 	addr := fmt.Sprintf("%s:%d", n.Host, n.Port)
 	log.Printf("Starting node %s on %s", n.Name, addr)
 
-	handler := common.MakeHandler(n.HandleMessage)
-	n.server = &http.Server{Addr: addr, Handler: handler}
+	mux := http.NewServeMux()
+	mux.Handle("/", common.MakeHandler(n.HandleMessage))
+	if n.HandleProgress != nil {
+		mux.Handle("/progress", common.MakeHandler(n.HandleProgress))
+	}
+
+	n.server = &http.Server{Addr: addr, Handler: mux}
 	if err := n.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Node %s failed: %v", n.Name, err)
 	}

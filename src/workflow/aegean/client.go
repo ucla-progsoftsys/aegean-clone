@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	writeKeyMod = 1000
-	readKeyMod  = 1000
+	writeKeyMod   = 1000
+	readKeyMod    = 1000
+	totalRequests = 1000
 )
 
 func ClientRequestLogicPipelined(c *nodes.Client) {
@@ -28,7 +29,8 @@ func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
 
 	logger := nodes.GetClientLogger()
 
-	for requestID := 1; requestID <= 1000; requestID++ {
+	progressIncrement := 1.0 / float64(totalRequests)
+	for requestID := 1; requestID <= totalRequests; requestID++ {
 		timestamp := float64(time.Now().UnixNano()) / 1e9
 
 		request := map[string]any{
@@ -67,6 +69,7 @@ func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
 		if waitForResponse && sent {
 			log.Printf("Client %s waiting for response to request %d", c.Name, requestID)
 			c.WaitForRequestCompletion(requestID)
+			c.IncrementProgress(progressIncrement)
 		}
 	}
 }

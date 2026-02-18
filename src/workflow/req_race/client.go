@@ -8,12 +8,15 @@ import (
 	"aegean/nodes"
 )
 
+const totalRequests = 1000
+
 // ClientRequestLogicPlaceholder sends requests sequentially
 func ClientRequestLogic(c *nodes.Client) {
 	// Wait for other nodes to start.
 	time.Sleep(2 * time.Second)
 
-	for requestID := 1; requestID <= 1000; requestID++ {
+	progressIncrement := 1.0 / float64(totalRequests)
+	for requestID := 1; requestID <= totalRequests; requestID++ {
 		request := map[string]any{
 			"request_id": requestID,
 			"timestamp":  float64(time.Now().UnixNano()) / 1e9,
@@ -31,5 +34,6 @@ func ClientRequestLogic(c *nodes.Client) {
 		}
 
 		c.WaitForRequestCompletion(requestID)
+		c.IncrementProgress(progressIncrement)
 	}
 }

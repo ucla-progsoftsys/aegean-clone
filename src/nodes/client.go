@@ -13,6 +13,10 @@ type Client struct {
 	mu                sync.Mutex
 	cond              *sync.Cond
 	RequestLogic      func(c *Client)
+
+	// For /progress
+	progress         float64
+	workflowFinished bool
 }
 
 func NewClient(name, host string, port int, next []string, requestLogic func(c *Client)) *Client {
@@ -27,11 +31,17 @@ func NewClient(name, host string, port int, next []string, requestLogic func(c *
 	}
 	client.cond = sync.NewCond(&client.mu)
 	client.Node.HandleMessage = client.HandleMessage
+	client.Node.HandleProgress = client.HandleProgress
 	return client
 }
 
 func (c *Client) Start() {
-	go c.RequestLogic(c)
+	go func() {
+		c.RequestLogic(c)
+		c.mu.Lock()
+		c.workflowFinished = true
+		c.mu.Unlock()
+	}()
 	c.Node.Start()
 }
 
@@ -81,5 +91,23 @@ func (c *Client) WaitForRequestCompletion(requestID any) {
 			return
 		}
 		c.cond.Wait()
+	}
+}
+
+func (c *Client) IncrementProgress(delta float64) {
+	c.mu.Lock()
+	c.progress += delta
+	c.mu.Unlock()
+}
+
+func (c *Client) HandleProgress(payload map[string]any) map[string]any {
+	c.mu.Lock()
+	progress := c.progress
+	finished := c.workflowFinished
+	c.mu.Unlock()
+
+	return map[string]any{
+		"progress": progress,
+		"finished": finished,
 	}
 }
