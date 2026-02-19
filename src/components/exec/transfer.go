@@ -2,7 +2,6 @@ package exec
 
 import (
 	"fmt"
-	"log"
 	"sort"
 	"time"
 
@@ -35,7 +34,6 @@ func (e *Exec) requestStateTransfer(minStableSeq int, _ int) bool {
 	// TODO: after state transfer, do we send back client the response?
 	// Request state transfer from a replica that has the correct state
 	for _, sourceExec := range e.Peers {
-		log.Printf("%s: Requesting state transfer from %s", e.Name, sourceExec)
 		e.mu.Lock()
 		e.stableState.EnsureMerkle()
 		knownSeq := e.stableState.SeqNum
@@ -55,12 +53,10 @@ func (e *Exec) requestStateTransfer(minStableSeq int, _ int) bool {
 
 		response, err := common.SendMessage(sourceExec, 8000, requestMsg)
 		if err != nil {
-			log.Printf("%s: Error requesting state transfer from %s: %v", e.Name, sourceExec, err)
 			continue
 		}
 
 		if response == nil || response["status"] != "ok" {
-			log.Printf("%s: State transfer from %s failed: %v", e.Name, sourceExec, response)
 			continue
 		}
 
@@ -74,7 +70,6 @@ func (e *Exec) requestStateTransfer(minStableSeq int, _ int) bool {
 		currentStableSeq := e.stableState.SeqNum
 		e.mu.Unlock()
 		if transferredStableSeqNum <= currentStableSeq || transferredStableSeqNum < minStableSeq {
-			log.Printf("%s: Received stable_seq_num %d from %s does not satisfy required seq (current=%d required=%d)", e.Name, transferredStableSeqNum, sourceExec, currentStableSeq, minStableSeq)
 			continue
 		}
 
@@ -98,7 +93,6 @@ func (e *Exec) requestStateTransfer(minStableSeq int, _ int) bool {
 			fullState, ok := response["state"].(map[string]any)
 			if !ok {
 				e.mu.Unlock()
-				log.Printf("%s: Invalid full state transfer from %s", e.Name, sourceExec)
 				continue
 			}
 			merged = make(map[string]string, len(fullState))
@@ -107,13 +101,11 @@ func (e *Exec) requestStateTransfer(minStableSeq int, _ int) bool {
 			}
 		default:
 			e.mu.Unlock()
-			log.Printf("%s: Invalid state transfer mode from %s: %q", e.Name, sourceExec, mode)
 			continue
 		}
 		mergedMerkle := NewMerkleTreeFromMap(merged)
 		if mergedMerkle.Root() != transferredStateRoot {
 			e.mu.Unlock()
-			log.Printf("%s: Reconstructed root mismatch from %s (local=%s remote=%s)", e.Name, sourceExec, common.TruncateToken(mergedMerkle.Root()), common.TruncateToken(transferredStateRoot))
 			continue
 		}
 		e.mu.Unlock()
@@ -151,17 +143,13 @@ func (e *Exec) requestStateTransfer(minStableSeq int, _ int) bool {
 		}
 		e.nextBatchSeq = e.stableState.SeqNum + 1
 		e.nextVerifySeq = e.stableState.SeqNum + 1
-		appliedSeq := e.stableState.SeqNum
 		e.mu.Unlock()
-
-		log.Printf("%s: Successfully applied state transfer from %s, now at stable_seq_num %d", e.Name, sourceExec, appliedSeq)
 		return true
 	}
 	return false
 }
 
 func (e *Exec) handleStateTransferRequest(payload map[string]any) map[string]any {
-	requestingExec, _ := payload["requesting_exec"].(string)
 	knownRoot, _ := payload["known_state_root"].(string)
 	knownLeafHashes := map[string]string{}
 	if leafAny, ok := payload["known_leaf_hashes"].(map[string]any); ok {
@@ -178,7 +166,6 @@ func (e *Exec) handleStateTransferRequest(payload map[string]any) map[string]any
 	stablePrevHash := e.stableState.PrevHash
 	stableRoot := e.stableState.MerkleRoot
 	e.mu.Unlock()
-	log.Printf("%s: Received state transfer request from %s, providing stable state at seq_num %d", e.Name, requestingExec, stableSeq)
 
 	if knownRoot == stableRoot {
 		return map[string]any{

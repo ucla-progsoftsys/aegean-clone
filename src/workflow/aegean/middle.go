@@ -1,8 +1,6 @@
 package aegeanworkflow
 
 import (
-	"log"
-
 	"aegean/common"
 	"aegean/components/exec"
 )
@@ -35,7 +33,6 @@ func executeFanoutBase(e *exec.Exec, request map[string]any, ndSeed int64, ndTim
 			go func(target string, outgoing map[string]any) {
 				_, err := common.SendMessage(target, 8000, outgoing)
 				if err != nil {
-					log.Printf("Fanout from %s to %s failed: %v", e.Name, target, err)
 				}
 			}(target, outgoing)
 		}

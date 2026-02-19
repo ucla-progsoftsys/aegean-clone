@@ -1,10 +1,6 @@
 package mixer
 
-import (
-	"log"
-
-	"aegean/common"
-)
+import "aegean/common"
 
 type Mixer struct {
 	Name   string
@@ -13,7 +9,7 @@ type Mixer struct {
 
 func NewMixer(name string, nextCh chan<- map[string]any) *Mixer {
 	if nextCh == nil {
-		log.Fatalf("mixer component requires non-nil nextCh")
+		panic("mixer component requires non-nil nextCh")
 	}
 	m := &Mixer{
 		Name:   name,
@@ -125,17 +121,14 @@ func (m *Mixer) partitionIntoParallelBatches(batch []map[string]any) [][]map[str
 }
 
 func (m *Mixer) HandleBatchMessage(payload map[string]any) map[string]any {
-	log.Printf("Handler called on %s with payload: %v", m.Name, payload)
 
 	seqNum := common.GetInt(payload, "seq_num")
 	requests, ok := normalizeRequestSlice(payload["requests"])
 	if !ok {
-		log.Printf("%s: Invalid requests type %T", m.Name, payload["requests"])
 		return map[string]any{"status": "error", "error": "invalid requests"}
 	}
 
 	parallelBatches := m.partitionIntoParallelBatches(requests)
-	log.Printf("%s: Batch %d partitioned into %d parallelBatches from %d requests", m.Name, seqNum, len(parallelBatches), len(requests))
 
 	message := map[string]any{
 		"type":             "batch",
@@ -148,7 +141,6 @@ func (m *Mixer) HandleBatchMessage(payload map[string]any) map[string]any {
 	if m.NextCh != nil {
 		m.NextCh <- message
 	} else {
-		log.Printf("%s: Next channel not set; dropping batch %d", m.Name, seqNum)
 	}
 
 	return map[string]any{"status": "mixed", "seq_num": seqNum}

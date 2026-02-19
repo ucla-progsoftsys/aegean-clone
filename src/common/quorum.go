@@ -2,7 +2,6 @@ package common
 
 import (
 	"fmt"
-	"log"
 	"sync"
 )
 
@@ -33,7 +32,6 @@ func (q *QuorumHelper) Add(requestID any, sender string) bool {
 	}
 
 	if _, exists := q.received[key][sender]; exists {
-		log.Printf("Ignoring duplicate request %s from %s", key, sender)
 		return false
 	}
 	previousCount := len(q.received[key])
@@ -41,15 +39,11 @@ func (q *QuorumHelper) Add(requestID any, sender string) bool {
 	newCount := previousCount + 1
 
 	if newCount == q.quorumSize {
-		log.Printf("Quorum reached for request %s", key)
 		return true
 	}
 	if newCount < q.quorumSize {
-		log.Printf("Request %s: %d/%d", key, newCount, q.quorumSize)
 		return false
 	}
-
-	log.Printf("Extra sender for request %s: %d/%d", key, newCount, q.quorumSize)
 	return false
 }
 

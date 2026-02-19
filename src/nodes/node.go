@@ -2,7 +2,6 @@ package nodes
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
 	"aegean/common"
@@ -34,16 +33,14 @@ func NewNode(name, host string, port int) *Node {
 // Start the node and process HTTP requests
 func (n *Node) Start() {
 	if n.server != nil {
-		log.Printf("Node %s already running", n.Name)
 		return
 	}
 
 	if n.HandleMessage == nil {
-		log.Fatalf("Node %s: HandleMessage not set", n.Name)
+		panic(fmt.Sprintf("Node %s: HandleMessage not set", n.Name))
 	}
 
 	addr := fmt.Sprintf("%s:%d", n.Host, n.Port)
-	log.Printf("Starting node %s on %s", n.Name, addr)
 
 	mux := http.NewServeMux()
 	mux.Handle("/", common.MakeHandler(n.HandleMessage))
@@ -56,6 +53,6 @@ func (n *Node) Start() {
 
 	n.server = &http.Server{Addr: addr, Handler: mux}
 	if err := n.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Node %s failed: %v", n.Name, err)
+		panic(fmt.Sprintf("Node %s failed: %v", n.Name, err))
 	}
 }

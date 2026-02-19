@@ -1,10 +1,6 @@
 package verifier
 
-import (
-	"log"
-
-	"aegean/common"
-)
+import "aegean/common"
 
 func (v *Verifier) flushNextVerify() bool {
 	view, seqNum, ok := v.verifyBuffer.PeekNext()
@@ -106,7 +102,6 @@ func (v *Verifier) applyVerifyMessage(payload map[string]any) map[string]any {
 		"verifier_id": v.Name,
 	}
 	go v.sendToVerifiers(prepareMsg)
-	log.Printf("Verifier %s: PREPREPARED seq=%d view=%d token=%s", v.Name, seqNum, v.view, common.TruncateToken(token))
 
 	// Fast-path local transition when quorum size is 1.
 	if prepareCount >= v.phaseQuorum && slot.preparedToken == "" {

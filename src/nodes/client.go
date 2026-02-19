@@ -3,7 +3,6 @@ package nodes
 import (
 	"aegean/common"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -26,7 +25,7 @@ const clientTraceLogPath = "/tmp/client_result.jsonl"
 
 func NewClient(name, host string, port int, next []string, requestLogic func(c *Client)) *Client {
 	if requestLogic == nil {
-		log.Fatalf("client requires RequestLogic")
+		panic("client requires RequestLogic")
 	}
 	client := &Client{
 		Node:              NewNode(name, host, port),
@@ -36,7 +35,6 @@ func NewClient(name, host string, port int, next []string, requestLogic func(c *
 	}
 	traceLogger, err := common.NewTraceLogger(clientTraceLogPath)
 	if err != nil {
-		log.Printf("client trace logger disabled: %v", err)
 		client.TraceLogger = common.NewNoopTraceLogger()
 	} else {
 		client.TraceLogger = traceLogger
@@ -59,7 +57,6 @@ func (c *Client) Start() {
 }
 
 func (c *Client) HandleMessage(payload map[string]any) map[string]any {
-	log.Printf("Handler called on %s with payload: %v", c.Name, payload)
 
 	requestID := payload["request_id"]
 	response, _ := payload["response"].(map[string]any)
@@ -70,7 +67,6 @@ func (c *Client) HandleMessage(payload map[string]any) map[string]any {
 	defer c.mu.Unlock()
 
 	if _, done := c.completedRequests[key]; done {
-		log.Printf("Client %s: Ignoring duplicate response for %v", c.Name, requestID)
 		_ = c.TraceLogger.WriteTrace(map[string]any{
 			"type":          "response",
 			"request_id":    requestID,
@@ -83,11 +79,9 @@ func (c *Client) HandleMessage(payload map[string]any) map[string]any {
 	}
 
 	// In CFT mode with a single exec pipeline, one response is sufficient
-	log.Printf("Client %s: Received response for request %v: %v", c.Name, requestID, response)
 	c.completedRequests[key] = struct{}{}
 	c.cond.Broadcast()
 	// TODO: In full BFT mode, would wait for f+1 matching responses
-	log.Printf("Client %s: Request %v completed with: %v", c.Name, requestID, response)
 
 	_ = c.TraceLogger.WriteTrace(map[string]any{
 		"type":          "response",

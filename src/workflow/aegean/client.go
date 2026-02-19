@@ -1,7 +1,6 @@
 package aegeanworkflow
 
 import (
-	"log"
 	"strconv"
 	"time"
 
@@ -50,13 +49,11 @@ func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
 			"request_id": requestID,
 			"status":     "ok",
 		}
-		log.Printf("Client %s sending request %d to %v", c.Name, requestID, c.Next)
 
 		sent := false
 		for _, nextNode := range c.Next {
 			_, err := common.SendMessage(nextNode, 8000, request)
 			if err != nil {
-				log.Printf("Failed to send to %s: %v", nextNode, err)
 				_ = c.TraceLogger.WriteTrace(map[string]any{
 					"type":            "request",
 					"request_id":      requestID,
@@ -69,7 +66,6 @@ func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
 				continue
 			}
 			sent = true
-			log.Printf("Ack from shim %s", nextNode)
 			_ = c.TraceLogger.WriteTrace(map[string]any{
 				"type":            "request",
 				"request_id":      requestID,
@@ -82,7 +78,6 @@ func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
 		}
 
 		if waitForResponse && sent {
-			log.Printf("Client %s waiting for response to request %d", c.Name, requestID)
 			c.WaitForRequestCompletion(requestID)
 			c.IncrementProgress(progressIncrement)
 		}

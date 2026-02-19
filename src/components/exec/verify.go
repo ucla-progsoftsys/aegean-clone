@@ -41,15 +41,27 @@ func (e *Exec) flushNextVerify() bool {
 			"prev_hash": prevHash,
 			"exec_id":   e.Name,
 		}
+		log.Printf(
+			"%s: assembled verify hash seq_num=%d view_num=%d stable_seq_num=%d prev_hash=%s state_root=%s final_hash=%s output_count=%d outputs=%v state=%v verifiers=%v",
+			e.Name,
+			seq,
+			view,
+			stableSeqNum,
+			prevHash,
+			pending.merkleRoot,
+			token,
+			len(pending.outputs),
+			pending.outputs,
+			pending.state,
+			e.Verifiers,
+		)
 
 		for _, verifier := range e.Verifiers {
 			if verifier == e.Name && e.VerifierCh != nil {
 				e.VerifierCh <- verifyMsg
 				continue
 			}
-			if _, err := common.SendMessage(verifier, 8000, verifyMsg); err != nil {
-				log.Printf("Failed to send to verifier %s: %v", verifier, err)
-			}
+			_, _ = common.SendMessage(verifier, 8000, verifyMsg)
 		}
 		return true
 	}
@@ -57,7 +69,6 @@ func (e *Exec) flushNextVerify() bool {
 }
 
 func (e *Exec) finalizeCommit(seqNum int, pending pendingExecResult, agreedToken string) {
-	log.Printf("%s: Committing seq_num %d", e.Name, seqNum)
 	if pending.merkle == nil {
 		pending.merkle = NewMerkleTreeFromMap(pending.state)
 		pending.merkleRoot = pending.merkle.Root()

@@ -1,8 +1,6 @@
 package reqraceworkflow
 
 import (
-	"log"
-
 	"aegean/common"
 	"aegean/components/exec"
 )
@@ -31,7 +29,6 @@ func ExecuteRequestMiddle(e *exec.Exec, request map[string]any, ndSeed int64, nd
 		sendFanoutRequest := func(target string, outgoing map[string]any) {
 			_, err := common.SendMessage(target, 8000, outgoing)
 			if err != nil {
-				log.Printf("Middle fanout from %s to %s failed: %v", e.Name, target, err)
 			}
 		}
 

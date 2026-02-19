@@ -1,7 +1,6 @@
 package reqraceworkflow
 
 import (
-	"log"
 	"time"
 
 	"aegean/common"
@@ -30,12 +29,9 @@ func ClientRequestLogic(c *nodes.Client) {
 			"op":         "default",
 			"op_payload": map[string]any{},
 		}
-
-		log.Printf("Client %s sending request %d to %v", c.Name, requestID, c.Next)
 		for _, nextNode := range c.Next {
 			_, err := common.SendMessage(nextNode, 8000, request)
 			if err != nil {
-				log.Printf("Failed to send request %d to %s: %v", requestID, nextNode, err)
 			}
 		}
 

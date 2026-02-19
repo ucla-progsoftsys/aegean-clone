@@ -1,10 +1,6 @@
 package shim
 
-import (
-	"log"
-
-	"aegean/common"
-)
+import "aegean/common"
 
 type Shim struct {
 	Name                 string
@@ -17,7 +13,7 @@ type Shim struct {
 
 func NewShim(name string, batcherCh chan<- map[string]any, execCh chan<- map[string]any, clients []string, quorumSize int) *Shim {
 	if batcherCh == nil {
-		log.Fatalf("shim component requires non-nil batcherCh")
+		panic("shim component requires non-nil batcherCh")
 	}
 	shim := &Shim{
 		Name:                 name,
@@ -31,7 +27,6 @@ func NewShim(name string, batcherCh chan<- map[string]any, execCh chan<- map[str
 }
 
 func (s *Shim) HandleRequestMessage(payload map[string]any) map[string]any {
-	log.Printf("Handler called on %s with payload: %v", s.Name, payload)
 
 	msgType, _ := payload["type"].(string)
 	if msgType == "" {
@@ -45,8 +40,6 @@ func (s *Shim) HandleRequestMessage(payload map[string]any) map[string]any {
 	if s.requestQuorumHelper.Add(requestID, sender) {
 		if s.BatcherCh != nil {
 			s.BatcherCh <- payload
-		} else {
-			log.Printf("%s: Batcher channel not set; dropping request %v", s.Name, requestID)
 		}
 		return map[string]any{"status": "forwarded_to_mid_execs"}
 	}
@@ -54,7 +47,6 @@ func (s *Shim) HandleRequestMessage(payload map[string]any) map[string]any {
 }
 
 func (s *Shim) HandleIncomingResponse(payload map[string]any) map[string]any {
-	log.Printf("Handler called on %s with payload: %v", s.Name, payload)
 
 	requestID := payload["request_id"]
 	sender, _ := payload["sender"].(string)
@@ -83,7 +75,6 @@ func (s *Shim) HandleOutgoingResponse(payload map[string]any) map[string]any {
 
 	// Handle response from exec - broadcast to all clients that sent the request
 	// TODO: Or do we wait for a quorum, and then broadcast
-	log.Printf("%s: Broadcasting response for request %v to %d clients: %v", s.Name, requestID, len(s.Clients), s.Clients)
 
 	for _, client := range s.Clients {
 		clientResponse := map[string]any{
@@ -93,10 +84,8 @@ func (s *Shim) HandleOutgoingResponse(payload map[string]any) map[string]any {
 			"sender":     sender,
 		}
 		if _, err := common.SendMessage(client, 8000, clientResponse); err != nil {
-			log.Printf("%s: Failed to send response to %s: %v", s.Name, client, err)
 			continue
 		}
-		log.Printf("%s: Sent response to client %s", s.Name, client)
 	}
 
 	return map[string]any{"status": "response_broadcast", "recipients": s.Clients}

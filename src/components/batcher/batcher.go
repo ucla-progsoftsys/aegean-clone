@@ -1,7 +1,6 @@
 package batcher
 
 import (
-	"log"
 	"sync"
 	"time"
 
@@ -27,7 +26,7 @@ type Batcher struct {
 
 func NewBatcher(name string, nextCh chan<- map[string]any, execs []string, isPrimary bool) *Batcher {
 	if nextCh == nil {
-		log.Fatalf("batcher component requires non-nil nextCh")
+		panic("batcher component requires non-nil nextCh")
 	}
 	b := &Batcher{
 		Name:      name,
@@ -83,21 +82,16 @@ func (b *Batcher) flushBatchLocked() {
 		"nd_timestamp": float64(time.Now().UnixNano()) / 1e9,
 	}
 
-	log.Printf("%s: Created batch %d with %d requests", b.Name, b.seqNum, len(batch))
-
 	for _, execNode := range b.Execs {
 		if execNode == b.Name && b.NextCh != nil {
 			b.NextCh <- message
 			continue
 		}
-		if _, err := common.SendMessage(execNode, 8000, message); err != nil {
-			log.Printf("%s: Failed to send batch %d to exec %s: %v", b.Name, b.seqNum, execNode, err)
-		}
+		_, _ = common.SendMessage(execNode, 8000, message)
 	}
 }
 
 func (b *Batcher) HandleRequestMessage(payload map[string]any) map[string]any {
-	log.Printf("Handler called on %s with payload: %v", b.Name, payload)
 
 	// TODO: should we forward to primary + also check if primary is live?
 	if !b.isPrimary {

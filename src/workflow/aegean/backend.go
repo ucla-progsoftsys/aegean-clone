@@ -1,7 +1,6 @@
 package aegeanworkflow
 
 import (
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -53,7 +52,6 @@ func executeRequestBase(e *exec.Exec, request map[string]any, ndSeed int64, ndTi
 		if injectDivergence {
 			writeKey = writeKey + "_divergent_" + e.Name
 			writeValue = writeValue + "_divergent_" + e.Name
-			log.Printf("%s: injecting artificial divergence on request %v (write_key=%q write_value=%q)", e.Name, requestID, writeKey, writeValue)
 		}
 
 		// Write to key

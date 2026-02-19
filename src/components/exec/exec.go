@@ -2,7 +2,6 @@ package exec
 
 import (
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -83,10 +82,10 @@ type Exec struct {
 
 func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- map[string]any, shimCh chan<- map[string]any, verifyResponseQuorumSize int, executeRequest ExecuteRequestFunc) *Exec {
 	if verifierCh == nil || shimCh == nil {
-		log.Fatalf("exec component requires non-nil channels")
+		panic("exec component requires non-nil channels")
 	}
 	if executeRequest == nil {
-		log.Fatalf("exec component requires ExecuteRequest")
+		panic("exec component requires ExecuteRequest")
 	}
 	initialKV := map[string]string{}
 	initialMerkle := NewMerkleTreeFromMap(initialKV)
@@ -225,7 +224,6 @@ func (e *Exec) ConsumeNestedResponse(requestID any) (map[string]any, bool) {
 }
 
 func (e *Exec) HandleBatchMessage(payload map[string]any) map[string]any {
-	log.Printf("Handler called on %s with payload: %v", e.Name, payload)
 	seqNum := common.GetInt(payload, "seq_num")
 	e.processMu.Lock()
 	defer e.processMu.Unlock()
@@ -249,7 +247,6 @@ func (e *Exec) HandleBatchMessage(payload map[string]any) map[string]any {
 }
 
 func (e *Exec) HandleVerifyResponseMessage(payload map[string]any) map[string]any {
-	log.Printf("Handler called on %s with payload: %v", e.Name, payload)
 	seqNum := common.GetInt(payload, "seq_num")
 	view := common.GetInt(payload, "view")
 	e.processMu.Lock()

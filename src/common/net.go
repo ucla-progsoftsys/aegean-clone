@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 )
@@ -61,8 +60,6 @@ func SendMessageToPath(host string, port int, path string, payload any, opts ...
 		resp.Body.Close()
 		return result, nil
 	}
-
-	log.Printf("All %d attempts failed for %s:%d", retries, host, port)
 	return nil, lastErr
 }
 

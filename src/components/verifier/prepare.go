@@ -1,10 +1,6 @@
 package verifier
 
-import (
-	"log"
-
-	"aegean/common"
-)
+import "aegean/common"
 
 func (v *Verifier) applyPrepareMessage(payload map[string]any) map[string]any {
 	seqNum := common.GetInt(payload, "seq_num")
@@ -52,7 +48,6 @@ func (v *Verifier) applyPrepareMessage(payload map[string]any) map[string]any {
 		"verifier_id": v.Name,
 	}
 	go v.sendToVerifiers(commitMsg)
-	log.Printf("Verifier %s: PREPARED seq=%d view=%d token=%s", v.Name, seqNum, v.view, common.TruncateToken(token))
 
 	if commitCount >= v.phaseQuorum && slot.committedToken == "" {
 		slot.committedToken = token

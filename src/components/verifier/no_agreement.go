@@ -1,7 +1,5 @@
 package verifier
 
-import "log"
-
 func (v *Verifier) highestPreparedLocked(view int) (int, string, bool) {
 	bestSeq := -1
 	bestToken := ""
@@ -38,7 +36,6 @@ func (v *Verifier) handleNoAgreement(seqNum int, timerView int) {
 	v.mu.Unlock()
 
 	// Paper mentions throughput-based trigger; currently timeout-only per user request.
-	log.Printf("Verifier %s: no agreement at seq=%d view=%d, starting view-change target_view=%d", v.Name, seqNum, timerView, targetView)
 	_ = v.applyViewChangeMessage(map[string]any{
 		"type":         "view_change",
 		"target_view":  targetView,

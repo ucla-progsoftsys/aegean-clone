@@ -1,7 +1,6 @@
 package exec
 
 import (
-	"log"
 	"time"
 
 	"aegean/common"
@@ -38,10 +37,8 @@ func (e *Exec) handleBatch(payload map[string]any) map[string]any {
 
 	parallelBatches, ok := parallelBatchesAny.([][]map[string]any)
 	if !ok {
-		log.Printf("%s: Invalid parallel_batches type %T", e.Name, parallelBatchesAny)
 		return map[string]any{"status": "error", "error": "invalid parallel_batches"}
 	}
-	log.Printf("%s: Executing batch %d with %d parallelBatches", e.Name, seqNum, len(parallelBatches))
 
 	// Defer insertion of new keys to end-of-batch deterministic phase.
 	e.beginBatchMerkleContext()

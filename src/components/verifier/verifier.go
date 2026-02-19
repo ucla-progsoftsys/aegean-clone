@@ -1,7 +1,6 @@
 package verifier
 
 import (
-	"log"
 	"sync"
 	"time"
 
@@ -50,7 +49,7 @@ type verifySlot struct {
 
 func NewVerifier(name string, verifiers []string, execs []string, execCh chan<- map[string]any, execVerifyQuorumSize int, phaseQuorumSize int, expectedExecVotes int) *Verifier {
 	if execCh == nil {
-		log.Fatalf("verifier component requires non-nil execCh")
+		panic("verifier component requires non-nil execCh")
 	}
 	v := &Verifier{
 		Name:              name,
@@ -108,7 +107,6 @@ func (v *Verifier) sendToVerifiers(msg map[string]any) {
 			continue
 		}
 		if _, err := common.SendMessage(verifierNode, 8000, msg); err != nil {
-			log.Printf("Failed to send to verifier %s: %v", verifierNode, err)
 		}
 	}
 }
@@ -129,7 +127,6 @@ func (v *Verifier) sendVerifyResponse(seqNum int, view int, token string, forceS
 			continue
 		}
 		if _, err := common.SendMessage(execNode, 8000, response); err != nil {
-			log.Printf("Failed to send to exec %s: %v", execNode, err)
 		}
 	}
 }

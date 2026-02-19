@@ -68,7 +68,8 @@ func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
 
 	e.stopVerifyResponseTimerLocked(seqNum)
 	e.clearVerifyResponseTrackingLocked(seqNum)
-	shouldRollback := view > e.view || forceSequential
+	currentView := e.view
+	shouldRollback := view > currentView || forceSequential
 	if shouldRollback && view > e.view {
 		e.view = view
 	}
@@ -79,11 +80,31 @@ func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
 
 	// Case 1: rollback (view increased or forced sequential by verifier).
 	if shouldRollback {
-		log.Printf("%s: rollback decision for seq=%d view=%d token=%s", e.Name, seqNum, view, common.TruncateToken(agreedToken))
+		log.Printf(
+			"%s: verifier decision=rollback seq_num=%d view_num=%d local_view=%d stable_seq_num=%d verifier_id=%s force_sequential=%t token=%s had_pending=%t pending_token=%s",
+			e.Name,
+			seqNum,
+			view,
+			currentView,
+			stableSeqNum,
+			verifierID,
+			forceSequential,
+			agreedToken,
+			hasPending,
+			pending.token,
+		)
 		if e.rollbackTo(seqNum, agreedToken) {
 			return map[string]any{"status": "processed", "decision": "rollback", "resolved": true}
 		}
 		// If rollback fails, repair
+		log.Printf(
+			"%s: verifier decision=state_transfer seq_num=%d view_num=%d reason=rollback_failed verifier_id=%s token=%s",
+			e.Name,
+			seqNum,
+			view,
+			verifierID,
+			agreedToken,
+		)
 		e.requestStateTransferWithRetry(seqNum, 0, 10*time.Millisecond)
 		e.mu.Lock()
 		e.forceSequential = true
@@ -98,7 +119,16 @@ func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
 
 	// Case 2: state transfer (same view quorum but token mismatch).
 	if pending.token != agreedToken {
-		log.Printf("%s: state diverged at seq=%d, agreed token mismatch", e.Name, seqNum)
+		log.Printf(
+			"%s: verifier decision=state_transfer seq_num=%d view_num=%d stable_seq_num=%d verifier_id=%s reason=token_mismatch local_token=%s agreed_token=%s",
+			e.Name,
+			seqNum,
+			view,
+			stableSeqNum,
+			verifierID,
+			pending.token,
+			agreedToken,
+		)
 		e.mu.Lock()
 		delete(e.pendingExecResults, seqNum)
 		e.mu.Unlock()
@@ -108,6 +138,17 @@ func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
 	}
 
 	// Case 3: normal commit (same view, token match).
+	log.Printf(
+		"%s: verifier decision=commit seq_num=%d view_num=%d stable_seq_num=%d verifier_id=%s force_sequential=%t token=%s output_count=%d",
+		e.Name,
+		seqNum,
+		view,
+		stableSeqNum,
+		verifierID,
+		forceSequential,
+		agreedToken,
+		len(pending.outputs),
+	)
 	e.finalizeCommit(seqNum, pending, agreedToken)
 	e.mu.Lock()
 	if e.nextVerifySeq == seqNum {
