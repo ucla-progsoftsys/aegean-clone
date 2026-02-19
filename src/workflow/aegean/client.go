@@ -28,8 +28,6 @@ func ClientRequestLogic(c *nodes.Client) {
 func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
 	c.WaitForNodesReady(readyNodes)
 
-	logger := nodes.GetClientLogger()
-
 	progressIncrement := 1.0 / float64(totalRequests)
 	for requestID := 1; requestID <= totalRequests; requestID++ {
 		timestamp := float64(time.Now().UnixNano()) / 1e9
@@ -59,12 +57,28 @@ func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
 			_, err := common.SendMessage(nextNode, 8000, request)
 			if err != nil {
 				log.Printf("Failed to send to %s: %v", nextNode, err)
-				logger.LogRequest(requestID, nextNode, "error", request, expectedResult)
+				_ = c.TraceLogger.WriteTrace(map[string]any{
+					"type":            "request",
+					"request_id":      requestID,
+					"send_to":         nextNode,
+					"status_code":     "error",
+					"payload":         request,
+					"expected_result": expectedResult,
+					"timestamp":       time.Now().Format(time.RFC3339Nano),
+				})
 				continue
 			}
 			sent = true
 			log.Printf("Ack from shim %s", nextNode)
-			logger.LogRequest(requestID, nextNode, "ack", request, expectedResult)
+			_ = c.TraceLogger.WriteTrace(map[string]any{
+				"type":            "request",
+				"request_id":      requestID,
+				"send_to":         nextNode,
+				"status_code":     "ack",
+				"payload":         request,
+				"expected_result": expectedResult,
+				"timestamp":       time.Now().Format(time.RFC3339Nano),
+			})
 		}
 
 		if waitForResponse && sent {

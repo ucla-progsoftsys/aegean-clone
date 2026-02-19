@@ -12,6 +12,7 @@ type Client struct {
 	*Node
 	Next              []string
 	completedRequests map[string]struct{}
+	TraceLogger       *common.TraceLogger
 	mu                sync.Mutex
 	cond              *sync.Cond
 	RequestLogic      func(c *Client)
@@ -20,6 +21,8 @@ type Client struct {
 	progress         float64
 	workflowFinished bool
 }
+
+const clientTraceLogPath = "/tmp/client_result.jsonl"
 
 func NewClient(name, host string, port int, next []string, requestLogic func(c *Client)) *Client {
 	if requestLogic == nil {
@@ -30,6 +33,13 @@ func NewClient(name, host string, port int, next []string, requestLogic func(c *
 		Next:              next,
 		completedRequests: make(map[string]struct{}),
 		RequestLogic:      requestLogic,
+	}
+	traceLogger, err := common.NewTraceLogger(clientTraceLogPath)
+	if err != nil {
+		log.Printf("client trace logger disabled: %v", err)
+		client.TraceLogger = common.NewNoopTraceLogger()
+	} else {
+		client.TraceLogger = traceLogger
 	}
 	client.cond = sync.NewCond(&client.mu)
 	client.Node.HandleMessage = client.HandleMessage
@@ -56,14 +66,19 @@ func (c *Client) HandleMessage(payload map[string]any) map[string]any {
 	sender, _ := payload["sender"].(string)
 	key := toKey(requestID)
 
-	logger := GetClientLogger()
-
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if _, done := c.completedRequests[key]; done {
 		log.Printf("Client %s: Ignoring duplicate response for %v", c.Name, requestID)
-		logger.LogResponse(requestID, sender, payload, response)
+		_ = c.TraceLogger.WriteTrace(map[string]any{
+			"type":          "response",
+			"request_id":    requestID,
+			"receive_from":  sender,
+			"payload":       payload,
+			"actual_result": response,
+			"timestamp":     time.Now().Format(time.RFC3339Nano),
+		})
 		return map[string]any{"status": "already_completed"}
 	}
 
@@ -74,7 +89,14 @@ func (c *Client) HandleMessage(payload map[string]any) map[string]any {
 	// TODO: In full BFT mode, would wait for f+1 matching responses
 	log.Printf("Client %s: Request %v completed with: %v", c.Name, requestID, response)
 
-	logger.LogResponse(requestID, sender, payload, response)
+	_ = c.TraceLogger.WriteTrace(map[string]any{
+		"type":          "response",
+		"request_id":    requestID,
+		"receive_from":  sender,
+		"payload":       payload,
+		"actual_result": response,
+		"timestamp":     time.Now().Format(time.RFC3339Nano),
+	})
 
 	return map[string]any{"status": "response_received", "request_id": requestID}
 }

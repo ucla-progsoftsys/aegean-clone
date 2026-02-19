@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	injectNetworkDelay = true
-	injectChannelDelay = true
+	injectNetworkDelay = false
+	injectChannelDelay = false
 )
 
 // Server combines shim, mixer, exec, and verifier into one node
