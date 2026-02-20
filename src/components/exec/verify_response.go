@@ -15,10 +15,16 @@ func (e *Exec) flushNextVerifyResponse() bool {
 	}
 	e.mu.Lock()
 	stableSeqNum := e.stableState.SeqNum
-	_, hasPending := e.pendingExecResults[msgSeq]
+	pending, hasPending := e.pendingExecResults[msgSeq]
 	e.mu.Unlock()
 	// Keep the highest-priority tuple buffered until this seq is actionable.
+	// For seq > stable:
+	// - no pending result yet -> cannot decide
+	// - pending exists but local token not computed yet -> cannot compare against agreed token
 	if msgSeq > stableSeqNum && !hasPending {
+		return false
+	}
+	if msgSeq > stableSeqNum && hasPending && pending.token == "" {
 		return false
 	}
 	msgs := e.verifyBuffer.Pop(msgView, msgSeq)
