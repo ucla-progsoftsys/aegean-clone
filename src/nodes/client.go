@@ -72,6 +72,7 @@ func (c *Client) HandleMessage(payload map[string]any) map[string]any {
 			"actual_result": response,
 			"timestamp":     time.Now().Format(time.RFC3339Nano),
 		})
+		c.progress++
 		return map[string]any{"status": "already_completed"}
 	}
 
