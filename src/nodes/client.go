@@ -143,8 +143,9 @@ func (c *Client) HandleProgress(payload map[string]any) map[string]any {
 	c.mu.Unlock()
 
 	return map[string]any{
-		"progress": progress / totalProgress,
-		"finished": progress == totalProgress,
+		"progress":               progress / totalProgress,
+		"finished":               progress == totalProgress,
+		"disableProgressTimeout": false,
 	}
 }
 

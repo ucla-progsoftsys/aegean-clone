@@ -156,7 +156,8 @@ def get_client_progress(client_name):
     payload = json.loads(result.stdout or "{}")
     progress = float(payload.get("progress", 0.0))
     finished = bool(payload.get("finished", False))
-    return progress, finished
+    disable_progress_timeout = bool(payload.get("disableProgressTimeout", False))
+    return progress, finished, disable_progress_timeout
 
 
 def wait_for_clients_progress(client_names, poll_interval=1.0, stall_timeout=30.0):
@@ -171,11 +172,13 @@ def wait_for_clients_progress(client_names, poll_interval=1.0, stall_timeout=30.
         while True:
             progress_sum = 0
             all_finished = True
+            disable_progress_timeout = False
             for name in client_names:
                 try:
-                    progress, finished = get_client_progress(name)
+                    progress, finished, disable_timeout = get_client_progress(name)
                     progress_sum += progress
                     all_finished = all_finished and finished
+                    disable_progress_timeout = disable_progress_timeout or disable_timeout
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("Failed to read progress from %s: %s", name, exc)
                     all_finished = False
@@ -189,7 +192,7 @@ def wait_for_clients_progress(client_names, poll_interval=1.0, stall_timeout=30.
             if progress_sum != prev_progress:
                 prev_progress = progress_sum
                 prev_progress_time = time.monotonic()
-            elif time.monotonic() - prev_progress_time > stall_timeout:
+            elif not disable_progress_timeout and time.monotonic() - prev_progress_time > stall_timeout:
                 logger.warning(
                     "Progress stalled for over %.1fs (total_progress=%.3f)",
                     stall_timeout,
