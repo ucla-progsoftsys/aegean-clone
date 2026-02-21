@@ -12,7 +12,21 @@ RUN mkdir -p /etc/apt/apt.conf.d && \
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     openssh-server \
+    ca-certificates \
+    wget \
     && rm -rf /var/lib/apt/lists/*
+
+# Install oha (prebuilt release binary; supports linux/amd64 + linux/arm64)
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+      amd64) asset="oha-linux-amd64" ;; \
+      arm64) asset="oha-linux-arm64" ;; \
+      *) echo "unsupported arch: $arch" >&2; exit 1 ;; \
+    esac; \
+    wget -O /usr/local/bin/oha "https://github.com/hatoo/oha/releases/latest/download/${asset}"; \
+    chmod +x /usr/local/bin/oha; \
+    oha --version
 
 # Ensure `go` resolves even in shells with a minimal PATH
 RUN ln -sf /usr/local/go/bin/go /usr/bin/go
