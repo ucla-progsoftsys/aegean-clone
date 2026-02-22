@@ -17,8 +17,8 @@ const (
 	ohaTargetURL       = "http://node2:8000/"
 	ohaTargetNode      = "node2"
 	ohaBodyPath        = "/tmp/oha-requests.ndjson"
-	ohaRequestTimeout  = "5s"
-	ohaCommandDeadline = 2 * time.Minute
+	ohaRequestTimeout  = "30s"
+	ohaCommandDeadline = 20 * time.Minute
 )
 
 func OhaClientRequestLogic(c *nodes.Client) {
@@ -41,7 +41,7 @@ func OhaClientRequestLogic(c *nodes.Client) {
 			"op_payload": map[string]any{
 				"spin_time":   0.01,
 				"write_key":   strconv.Itoa(requestIdx % writeKeyMod),
-				"write_value": "value_" + strconv.Itoa(requestIdx),
+				"write_value": makeLargeWriteValue(requestIdx),
 				"read_key":    strconv.Itoa(requestIdx % readKeyMod),
 			},
 			"is_client_oha": true,

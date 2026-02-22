@@ -2,6 +2,7 @@ package aegeanworkflow
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"aegean/common"
@@ -39,7 +40,7 @@ func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
 			"op_payload": map[string]any{
 				"spin_time":   0.01,
 				"write_key":   strconv.Itoa(requestID % writeKeyMod),
-				"write_value": "value_" + strconv.Itoa(requestID),
+				"write_value": makeLargeWriteValue(requestID),
 				"read_key":    strconv.Itoa(requestID % readKeyMod),
 			},
 		}
@@ -87,8 +88,14 @@ func expectedReadValue(requestID int) string {
 	readKey := requestID % readKeyMod
 	for candidate := requestID; candidate >= 1; candidate-- {
 		if candidate%writeKeyMod == readKey {
-			return "value_" + strconv.Itoa(candidate)
+			return makeLargeWriteValue(candidate)
 		}
 	}
 	return ""
+}
+
+func makeLargeWriteValue(requestID int) string {
+	token := strconv.Itoa(requestID)
+	repeat := 10000/len(token) + 1
+	return strings.Repeat(token, repeat)
 }
