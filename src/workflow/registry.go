@@ -8,10 +8,11 @@ import (
 )
 
 var ClientWorkflows = map[string]func(c *nodes.Client){
-	"aegean_client":    aegeanworkflow.ClientRequestLogic,
-	"aegean_oha_client": aegeanworkflow.OhaClientRequestLogic,
-	"aegean_pipelined": aegeanworkflow.ClientRequestLogicPipelined,
-	"req_race_client":  reqraceworkflow.ClientRequestLogic,
+	"aegean_client":       aegeanworkflow.ClientRequestLogic,
+	"aegean_oha_client":   aegeanworkflow.OhaClientRequestLogic,
+	"aegean_pipelined":    aegeanworkflow.ClientRequestLogicPipelined,
+	"req_race_client":     reqraceworkflow.ClientRequestLogic,
+	"req_race_oha_client": reqraceworkflow.OhaClientRequestLogic,
 }
 
 var ExecWorkflows = map[string]exec.ExecuteRequestFunc{
@@ -30,7 +31,7 @@ var ExecWorkflows = map[string]exec.ExecuteRequestFunc{
 }
 
 var InitStateWorkflows = map[string]exec.InitStateFunc{
-	"default":         aegeanworkflow.InitState,
-	"aegean_default":  aegeanworkflow.InitState,
+	"default":          aegeanworkflow.InitState,
+	"aegean_default":   aegeanworkflow.InitState,
 	"req_race_default": reqraceworkflow.InitState,
 }
