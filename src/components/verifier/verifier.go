@@ -62,7 +62,7 @@ func NewVerifier(name string, verifiers []string, execs []string, execCh chan<- 
 		slots:             make(map[int]*verifySlot),
 		committed:         make(map[int]string),
 		verifyBuffer:      common.NewMultiOOOBuffer[map[string]any](),
-		viewChangeTimeout: 2 * time.Second,
+		viewChangeTimeout: 10 * time.Second,
 		viewTimers:        make(map[int]*time.Timer),
 		viewChangeRounds:  make(map[int]*viewChangeRound),
 	}
