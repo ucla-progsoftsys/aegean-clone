@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -14,15 +15,14 @@ import (
 
 const (
 	numRequests        = 1000
-	ohaTargetURL       = "http://node2:8000/"
-	ohaTargetNode      = "node2"
 	ohaBodyPath        = "/tmp/oha-requests.ndjson"
 	ohaRequestTimeout  = "30s"
 	ohaCommandDeadline = 20 * time.Minute
 )
 
 func OhaClientRequestLogic(c *nodes.Client) {
-	c.WaitForNodesReady([]string{ohaTargetNode})
+	c.WaitForNodesReady(c.Next)
+	ohaTargetURL := fmt.Sprintf("http://%s:8000/", c.Name)
 
 	bodyFile, err := os.Create(ohaBodyPath)
 	if err != nil {
@@ -44,7 +44,6 @@ func OhaClientRequestLogic(c *nodes.Client) {
 				"write_value": makeLargeWriteValue(requestIdx),
 				"read_key":    strconv.Itoa(requestIdx % readKeyMod),
 			},
-			"is_client_oha": true,
 		}
 		line, err := json.Marshal(request)
 		if err != nil {
