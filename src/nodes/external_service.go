@@ -4,11 +4,13 @@ type ExternalService struct {
 	*Node
 	InitState    func(es *ExternalService)
 	ServiceLogic func(es *ExternalService, payload map[string]any) map[string]any
+	RunConfig    map[string]any
 }
 
 func NewExternalService(
 	name, host string,
 	port int,
+	runConfig map[string]any,
 	initState func(es *ExternalService),
 	serviceLogic func(es *ExternalService, payload map[string]any) map[string]any,
 ) *ExternalService {
@@ -17,6 +19,7 @@ func NewExternalService(
 		Node:         NewNode(name, host, port),
 		InitState:    initState,
 		ServiceLogic: serviceLogic,
+		RunConfig:    runConfig,
 	}
 	service.InitState(service)
 

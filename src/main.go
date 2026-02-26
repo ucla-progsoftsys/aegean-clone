@@ -94,7 +94,7 @@ func main() {
 		if serviceFn == nil {
 			panic(fmt.Sprintf("unknown external service workflow %q for node %s", serviceWorkflow, *name))
 		}
-		node = nodes.NewExternalService(*name, *host, *port, initFn, serviceFn)
+		node = nodes.NewExternalService(*name, *host, *port, runConfig.Params, initFn, serviceFn)
 	default:
 		panic(fmt.Sprintf("unrecognized node type: %s", cfg.Type))
 	}
