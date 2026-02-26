@@ -76,6 +76,25 @@ func main() {
 			panic(fmt.Sprintf("unknown init state workflow %q for node %s", initStateWorkflow, *name))
 		}
 		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Nodes, cfg.IsPrimaryBatcher, cfg.ShimQuorumSize, cfg.VerifyResponseQuorumSize, cfg.ExecVerifyQuorumSize, cfg.PhaseQuorumSize, cfg.ExpectedExecVotes, execFn, initFn, runConfig.Params)
+	case "external_service":
+		serviceInitWorkflow := cfg.ExternalServiceInitState
+		if serviceInitWorkflow == "" {
+			serviceInitWorkflow = "default"
+		}
+		initFn := workflow.ExternalServiceInitWorkflows[serviceInitWorkflow]
+		if initFn == nil {
+			panic(fmt.Sprintf("unknown external service init workflow %q for node %s", serviceInitWorkflow, *name))
+		}
+
+		serviceWorkflow := cfg.ExternalServiceWorkflow
+		if serviceWorkflow == "" {
+			serviceWorkflow = "default"
+		}
+		serviceFn := workflow.ExternalServiceWorkflows[serviceWorkflow]
+		if serviceFn == nil {
+			panic(fmt.Sprintf("unknown external service workflow %q for node %s", serviceWorkflow, *name))
+		}
+		node = nodes.NewExternalService(*name, *host, *port, initFn, serviceFn)
 	default:
 		panic(fmt.Sprintf("unrecognized node type: %s", cfg.Type))
 	}

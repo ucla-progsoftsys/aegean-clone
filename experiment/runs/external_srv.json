@@ -1,0 +1,6 @@
+{
+  "architecture": "external_srv.json",
+  "num_requests": 1000,
+  "oha_request_timeout": "5s",
+  "oha_command_deadline_seconds": 30
+}

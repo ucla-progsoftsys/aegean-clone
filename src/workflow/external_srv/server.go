@@ -1,4 +1,4 @@
-package noseexternalsrvworkflow
+package externalsrvworkflow
 
 import (
 	"aegean/common"
@@ -19,7 +19,7 @@ func ExecuteRequestServer(e *exec.Exec, request map[string]any, ndSeed int64, nd
 		}
 	}
 
-	externalServiceNode := common.MustString(e.RunConfig, "external_service_node")
+	externalServiceNode := "node5"
 	externalReq := map[string]any{
 		"type":       "request",
 		"request_id": requestID,

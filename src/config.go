@@ -18,6 +18,8 @@ type NodeConfig struct {
 	ExecWorkflow             string   `json:"exec_workflow"`
 	InitStateWorkflow        string   `json:"init_state_workflow"`
 	ClientWorkflow           string   `json:"client_workflow"`
+	ExternalServiceWorkflow  string   `json:"external_service_workflow"`
+	ExternalServiceInitState string   `json:"external_service_init_state"`
 	ShimQuorumSize           int      `json:"shimQuorumSize"`
 	VerifyResponseQuorumSize int      `json:"verifyResponseQuorumSize"`
 	ExecVerifyQuorumSize     int      `json:"execVerifyQuorumSize"`

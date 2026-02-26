@@ -1,4 +1,4 @@
-package noseexternalsrvworkflow
+package externalsrvworkflow
 
 import (
 	"aegean/nodes"
