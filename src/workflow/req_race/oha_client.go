@@ -1,6 +1,7 @@
 package reqraceworkflow
 
 import (
+	"aegean/common"
 	"aegean/nodes"
 	"bufio"
 	"context"
@@ -12,14 +13,15 @@ import (
 	"time"
 )
 
-const (
-	ohaBodyPath        = "/tmp/oha-requests.ndjson"
-	ohaRequestTimeout  = "5s"
-	ohaCommandDeadline = 10 * time.Second
-)
+const ohaBodyPath = "/tmp/oha-requests.ndjson"
 
 func OhaClientRequestLogic(c *nodes.Client) {
-	c.WaitForNodesReady(c.Next)
+	totalRequests := common.MustInt(c.RunConfig, "num_requests")
+	ohaRequestTimeout := common.MustString(c.RunConfig, "oha_request_timeout")
+	ohaCommandDeadlineSeconds := common.MustInt(c.RunConfig, "oha_command_deadline_seconds")
+	ohaCommandDeadline := time.Duration(ohaCommandDeadlineSeconds) * time.Second
+
+	c.WaitForNodesReady(c.ReadyNodes)
 
 	ohaTargetURL := fmt.Sprintf("http://%s:8000/", c.Name)
 

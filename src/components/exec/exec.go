@@ -37,6 +37,7 @@ type Exec struct {
 	Name      string
 	Verifiers []string
 	Peers     []string
+	RunConfig map[string]any
 	// Local component channels
 	VerifierCh chan<- map[string]any
 	ShimCh     chan<- map[string]any
@@ -85,7 +86,7 @@ type Exec struct {
 	ExecuteRequest ExecuteRequestFunc
 }
 
-func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- map[string]any, shimCh chan<- map[string]any, verifyResponseQuorumSize int, executeRequest ExecuteRequestFunc, initStateFn InitStateFunc) *Exec {
+func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- map[string]any, shimCh chan<- map[string]any, verifyResponseQuorumSize int, executeRequest ExecuteRequestFunc, initStateFn InitStateFunc, runConfig map[string]any) *Exec {
 	if verifierCh == nil || shimCh == nil {
 		panic("exec component requires non-nil channels")
 	}
@@ -93,9 +94,11 @@ func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- 
 		panic("exec component requires ExecuteRequest")
 	}
 
+	initialRunConfig := runConfig
+
 	initialKV := map[string]string{}
 	if initStateFn != nil {
-		if customKV := initStateFn(&Exec{Name: name}); customKV != nil {
+		if customKV := initStateFn(&Exec{Name: name, RunConfig: initialRunConfig}); customKV != nil {
 			initialKV = common.CopyStringMap(customKV)
 		}
 	}
@@ -120,6 +123,7 @@ func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- 
 		Name:                  name,
 		Verifiers:             verifiers,
 		Peers:                 peers,
+		RunConfig:             initialRunConfig,
 		VerifierCh:            verifierCh,
 		ShimCh:                shimCh,
 		ExecuteRequest:        executeRequest,

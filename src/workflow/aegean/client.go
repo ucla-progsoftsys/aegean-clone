@@ -9,14 +9,6 @@ import (
 	"aegean/nodes"
 )
 
-const (
-	writeKeyMod   = 1000
-	readKeyMod    = 1000
-	totalRequests = 1000
-)
-
-var readyNodes = []string{"node2", "node3", "node4", "node5", "node6", "node7"}
-
 func ClientRequestLogicPipelined(c *nodes.Client) {
 	runClientRequestLogic(c, false)
 }
@@ -26,10 +18,16 @@ func ClientRequestLogic(c *nodes.Client) {
 }
 
 func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
-	c.WaitForNodesReady(readyNodes)
-	c.TotalProgress = float32(totalRequests * len(c.Next))
+	numRequests := common.MustInt(c.RunConfig, "num_requests")
+	spinTimeSeconds := common.MustFloat64(c.RunConfig, "spin_time_seconds")
+	writeKeyMod := common.MustInt(c.RunConfig, "write_key_mod")
+	readKeyMod := common.MustInt(c.RunConfig, "read_key_mod")
+	valueLength := common.MustInt(c.RunConfig, "value_length")
 
-	for requestID := 1; requestID <= totalRequests; requestID++ {
+	c.WaitForNodesReady(c.ReadyNodes)
+	c.TotalProgress = float32(numRequests * len(c.Next))
+
+	for requestID := 1; requestID <= numRequests; requestID++ {
 		timestamp := float64(time.Now().UnixNano()) / 1e9
 
 		request := map[string]any{
@@ -38,15 +36,15 @@ func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
 			"sender":     c.Name,
 			"op":         "spin_write_read",
 			"op_payload": map[string]any{
-				"spin_time":   0.01,
+				"spin_time":   spinTimeSeconds,
 				"write_key":   strconv.Itoa(requestID % writeKeyMod),
-				"write_value": makeLargeWriteValue(requestID),
+				"write_value": makeLargeWriteValue(requestID, valueLength),
 				"read_key":    strconv.Itoa(requestID % readKeyMod),
 			},
 		}
 
 		expectedResult := map[string]any{
-			"read_value": expectedReadValue(requestID),
+			"read_value": expectedReadValue(requestID, writeKeyMod, readKeyMod, valueLength),
 			"request_id": requestID,
 			"status":     "ok",
 		}
@@ -84,18 +82,18 @@ func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
 	}
 }
 
-func expectedReadValue(requestID int) string {
+func expectedReadValue(requestID int, writeKeyMod int, readKeyMod int, valueLength int) string {
 	readKey := requestID % readKeyMod
 	for candidate := requestID; candidate >= 1; candidate-- {
 		if candidate%writeKeyMod == readKey {
-			return makeLargeWriteValue(candidate)
+			return makeLargeWriteValue(candidate, valueLength)
 		}
 	}
 	return ""
 }
 
-func makeLargeWriteValue(requestID int) string {
+func makeLargeWriteValue(requestID int, valueLength int) string {
 	token := strconv.Itoa(requestID)
-	repeat := 10000/len(token) + 1
+	repeat := valueLength/len(token) + 1
 	return strings.Repeat(token, repeat)
 }

@@ -10,11 +10,13 @@ import (
 type Client struct {
 	*Node
 	Next              []string
+	ReadyNodes        []string
 	completedRequests map[string]struct{}
 	TraceLogger       *common.TraceLogger
 	mu                sync.Mutex
 	cond              *sync.Cond
 	RequestLogic      func(c *Client)
+	RunConfig         map[string]any
 
 	// For /progress
 	progress      float32
@@ -23,15 +25,17 @@ type Client struct {
 
 const clientTraceLogPath = "/tmp/client_result.jsonl"
 
-func NewClient(name, host string, port int, next []string, requestLogic func(c *Client)) *Client {
+func NewClient(name, host string, port int, next []string, readyNodes []string, runConfig map[string]any, requestLogic func(c *Client)) *Client {
 	if requestLogic == nil {
 		panic("client requires RequestLogic")
 	}
 	client := &Client{
 		Node:              NewNode(name, host, port),
 		Next:              next,
+		ReadyNodes:        append([]string{}, readyNodes...),
 		completedRequests: make(map[string]struct{}),
 		RequestLogic:      requestLogic,
+		RunConfig:         runConfig,
 	}
 	traceLogger, err := common.NewTraceLogger(clientTraceLogPath)
 	if err != nil {

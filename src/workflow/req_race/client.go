@@ -7,19 +7,12 @@ import (
 	"aegean/nodes"
 )
 
-const totalRequests = 1000
-
-var readyNodes = []string{
-	"node2", "node3", "node4",
-	"node5", "node6", "node7",
-	"node8", "node9", "node10",
-	"node11", "node12", "node13",
-}
-
 // ClientRequestLogicPlaceholder sends requests sequentially
 func ClientRequestLogic(c *nodes.Client) {
-	c.WaitForNodesReady(readyNodes)
-	c.TotalProgress = totalRequests
+	totalRequests := common.MustInt(c.RunConfig, "num_requests")
+
+	c.WaitForNodesReady(c.ReadyNodes)
+	c.TotalProgress = float32(totalRequests)
 
 	for requestID := 1; requestID <= totalRequests; requestID++ {
 		request := map[string]any{

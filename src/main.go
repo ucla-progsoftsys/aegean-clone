@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"sort"
 
 	"aegean/nodes"
 	workflow "aegean/workflow"
@@ -12,14 +13,19 @@ func main() {
 	name := flag.String("name", "", "node name")
 	host := flag.String("host", "", "host to bind")
 	port := flag.Int("port", 0, "port to bind")
-	config := flag.String("config", "", "path to architecture config file")
+	config := flag.String("config", "", "path to run config file")
 	flag.Parse()
 
 	if *name == "" || *host == "" || *port == 0 || *config == "" {
 		panic("missing required flags: --name, --host, --port, --config")
 	}
 
-	configs, err := loadConfig(*config)
+	runConfig, err := loadRunConfig(*config)
+	if err != nil {
+		panic(err)
+	}
+
+	configs, err := loadConfig(runConfig.Architecture)
 	if err != nil {
 		panic(err)
 	}
@@ -28,6 +34,7 @@ func main() {
 	if !ok {
 		panic(fmt.Sprintf("unknown node name: %s", *name))
 	}
+	readyNodes := allNodeNamesExcept(configs, *name)
 
 	var node starter
 	switch cfg.Type {
@@ -40,7 +47,7 @@ func main() {
 		if clientFn == nil {
 			panic(fmt.Sprintf("unknown client workflow %q for node %s", clientWorkflow, *name))
 		}
-		node = nodes.NewClient(*name, *host, *port, cfg.Next, clientFn)
+		node = nodes.NewClient(*name, *host, *port, cfg.Next, readyNodes, runConfig.Params, clientFn)
 	case "oha_client":
 		clientWorkflow := cfg.ClientWorkflow
 		if clientWorkflow == "" {
@@ -50,7 +57,7 @@ func main() {
 		if clientFn == nil {
 			panic(fmt.Sprintf("unknown client workflow %q for node %s", clientWorkflow, *name))
 		}
-		node = nodes.NewOHAClient(*name, *host, *port, cfg.Next, clientFn)
+		node = nodes.NewOHAClient(*name, *host, *port, cfg.Next, readyNodes, runConfig.Params, clientFn)
 	case "server":
 		execWorkflow := cfg.ExecWorkflow
 		if execWorkflow == "" {
@@ -68,7 +75,7 @@ func main() {
 		if initFn == nil {
 			panic(fmt.Sprintf("unknown init state workflow %q for node %s", initStateWorkflow, *name))
 		}
-		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Nodes, cfg.IsPrimaryBatcher, cfg.ShimQuorumSize, cfg.VerifyResponseQuorumSize, cfg.ExecVerifyQuorumSize, cfg.PhaseQuorumSize, cfg.ExpectedExecVotes, execFn, initFn)
+		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Nodes, cfg.IsPrimaryBatcher, cfg.ShimQuorumSize, cfg.VerifyResponseQuorumSize, cfg.ExecVerifyQuorumSize, cfg.PhaseQuorumSize, cfg.ExpectedExecVotes, execFn, initFn, runConfig.Params)
 	default:
 		panic(fmt.Sprintf("unrecognized node type: %s", cfg.Type))
 	}
@@ -78,4 +85,16 @@ func main() {
 
 type starter interface {
 	Start()
+}
+
+func allNodeNamesExcept(configs map[string]NodeConfig, excludedName string) []string {
+	names := make([]string, 0, len(configs))
+	for name := range configs {
+		if name == excludedName {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }

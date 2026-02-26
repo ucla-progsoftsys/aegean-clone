@@ -94,7 +94,7 @@ func makeParallelBatches(requests ...map[string]any) [][]map[string]any {
 func newTestExec(name string, verifiers []string, peers []string) (*Exec, chan map[string]any, chan map[string]any) {
 	verifierCh := make(chan map[string]any, 64)
 	shimCh := make(chan map[string]any, 64)
-	exec := NewExec(name, verifiers, peers, verifierCh, shimCh, 1, testExecuteRequest, nil)
+	exec := NewExec(name, verifiers, peers, verifierCh, shimCh, 1, testExecuteRequest, nil, map[string]any{})
 	return exec, verifierCh, shimCh
 }
 
@@ -735,6 +735,7 @@ func TestExecRollbackReplaysUncommittedBatch(t *testing.T) {
 			return map[string]any{"request_id": request["request_id"], "status": "ok"}
 		},
 		nil,
+		map[string]any{},
 	)
 	stableKV := map[string]string{"stable": "yes"}
 	stableMerkle := NewMerkleTreeFromMap(stableKV)
@@ -860,6 +861,7 @@ func TestExecBlockedRequestResumesAfterNestedResponse(t *testing.T) {
 			}
 		},
 		nil,
+		map[string]any{},
 	)
 
 	done := make(chan map[string]any, 1)
@@ -921,6 +923,7 @@ func TestExecParallelBatchesYieldBlockedToNext(t *testing.T) {
 			}
 		},
 		nil,
+		map[string]any{},
 	)
 	exec.scheduler.parallelWindowK = 2
 
@@ -984,6 +987,7 @@ func TestExecParallelBatchWindowGatesByStableSeq(t *testing.T) {
 			}
 		},
 		nil,
+		map[string]any{},
 	)
 	exec.scheduler.parallelWindowK = 2
 
@@ -1050,6 +1054,7 @@ func TestExecParallelBatchSchedulingDeterministic(t *testing.T) {
 			return map[string]any{"request_id": requestID, "status": "blocked_for_nested_response"}
 		},
 		nil,
+		map[string]any{},
 	)
 	exec.workerCount = 1
 	exec.scheduler.parallelWindowK = 2
@@ -1119,6 +1124,7 @@ func TestExecForceSequentialDisablesParallelYield(t *testing.T) {
 			}
 		},
 		nil,
+		map[string]any{},
 	)
 	exec.forceSequential = true
 

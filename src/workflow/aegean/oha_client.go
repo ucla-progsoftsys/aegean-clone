@@ -1,6 +1,7 @@
 package aegeanworkflow
 
 import (
+	"aegean/common"
 	"aegean/nodes"
 	"bufio"
 	"context"
@@ -13,15 +14,19 @@ import (
 	"time"
 )
 
-const (
-	numRequests        = 1000
-	ohaBodyPath        = "/tmp/oha-requests.ndjson"
-	ohaRequestTimeout  = "30s"
-	ohaCommandDeadline = 20 * time.Minute
-)
+const ohaBodyPath = "/tmp/oha-requests.ndjson"
 
 func OhaClientRequestLogic(c *nodes.Client) {
-	c.WaitForNodesReady(c.Next)
+	numRequests := common.MustInt(c.RunConfig, "num_requests")
+	spinTimeSeconds := common.MustFloat64(c.RunConfig, "spin_time_seconds")
+	ohaRequestTimeout := common.MustString(c.RunConfig, "oha_request_timeout")
+	ohaCommandDeadlineSeconds := common.MustInt(c.RunConfig, "oha_command_deadline_seconds")
+	writeKeyMod := common.MustInt(c.RunConfig, "write_key_mod")
+	readKeyMod := common.MustInt(c.RunConfig, "read_key_mod")
+	valueLength := common.MustInt(c.RunConfig, "value_length")
+	ohaCommandDeadline := time.Duration(ohaCommandDeadlineSeconds) * time.Second
+
+	c.WaitForNodesReady(c.ReadyNodes)
 	ohaTargetURL := fmt.Sprintf("http://%s:8000/", c.Name)
 
 	bodyFile, err := os.Create(ohaBodyPath)
@@ -39,9 +44,9 @@ func OhaClientRequestLogic(c *nodes.Client) {
 			"sender":    c.Name,
 			"op":        "spin_write_read",
 			"op_payload": map[string]any{
-				"spin_time":   0.01,
+				"spin_time":   spinTimeSeconds,
 				"write_key":   strconv.Itoa(requestIdx % writeKeyMod),
-				"write_value": makeLargeWriteValue(requestIdx),
+				"write_value": makeLargeWriteValue(requestIdx, valueLength),
 				"read_key":    strconv.Itoa(requestIdx % readKeyMod),
 			},
 		}

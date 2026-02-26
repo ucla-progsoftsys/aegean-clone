@@ -1,6 +1,7 @@
 package aegeanworkflow
 
 import (
+	"aegean/common"
 	"strconv"
 	"strings"
 
@@ -8,11 +9,9 @@ import (
 )
 
 func InitState(e *exec.Exec) map[string]string {
-	_ = e
-	const (
-		keyCount    = 1000
-		valueLength = 10000
-	)
+	keyCount := common.MustInt(e.RunConfig, "key_count")
+	valueLength := common.MustInt(e.RunConfig, "value_length")
+
 	initial := make(map[string]string, keyCount)
 	value := strings.Repeat("x", valueLength)
 	for i := 1; i <= keyCount; i++ {

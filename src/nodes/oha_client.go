@@ -22,11 +22,11 @@ type pendingOHARequest struct {
 	doneCh chan map[string]any
 }
 
-func NewOHAClient(name, host string, port int, next []string, requestLogic func(c *Client)) *OHAClient {
+func NewOHAClient(name, host string, port int, next []string, readyNodes []string, runConfig map[string]any, requestLogic func(c *Client)) *OHAClient {
 	if requestLogic == nil {
 		panic("oha client requires RequestLogic")
 	}
-	baseClient := NewClient(name, host, port, next, requestLogic)
+	baseClient := NewClient(name, host, port, next, readyNodes, runConfig, requestLogic)
 	quorumSize := len(next)/2 + 1
 	client := &OHAClient{
 		Client:              baseClient,

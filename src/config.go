@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 type NodeConfig struct {
@@ -22,6 +23,11 @@ type NodeConfig struct {
 	ExecVerifyQuorumSize     int      `json:"execVerifyQuorumSize"`
 	PhaseQuorumSize          int      `json:"phaseQuorumSize"`
 	ExpectedExecVotes        int      `json:"expectedExecVotes"`
+}
+
+type RunConfig struct {
+	Architecture string         `json:"architecture"`
+	Params       map[string]any `json:"-"`
 }
 
 func loadConfig(path string) (map[string]NodeConfig, error) {
@@ -90,6 +96,35 @@ func loadConfig(path string) (map[string]NodeConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+func loadRunConfig(path string) (RunConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return RunConfig{}, fmt.Errorf("read run config %s: %w", path, err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return RunConfig{}, fmt.Errorf("parse run config %s: %w", path, err)
+	}
+	if raw == nil {
+		return RunConfig{}, fmt.Errorf("run config %s must be a JSON object", path)
+	}
+
+	architecture, _ := raw["architecture"].(string)
+	if architecture == "" {
+		return RunConfig{}, fmt.Errorf("run config %s missing required field \"architecture\"", path)
+	}
+	if !filepath.IsAbs(architecture) {
+		architecture = filepath.Clean(filepath.Join(filepath.Dir(path), "../architecture", architecture))
+	}
+	delete(raw, "architecture")
+
+	return RunConfig{
+		Architecture: architecture,
+		Params:       raw,
+	}, nil
 }
 
 func decodeObject(raw json.RawMessage) (map[string]any, error) {

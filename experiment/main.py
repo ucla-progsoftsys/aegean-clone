@@ -16,8 +16,21 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def load_experiment_topology(config_path):
-    with open(config_path, "r", encoding="utf-8") as f:
+def load_run_config(run_config_path):
+    with open(run_config_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    architecture = data.get("architecture")
+    if not architecture:
+        raise ValueError("run config must include non-empty 'architecture'")
+
+    base_dir = os.path.dirname(run_config_path) or "."
+    architecture_path = os.path.normpath(os.path.join(base_dir, "../architecture", architecture))
+    return architecture_path
+
+
+def load_experiment_topology(architecture_path):
+    with open(architecture_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     services = data.get("services", {})
@@ -207,10 +220,11 @@ def wait_for_clients_progress(client_names, poll_interval=1.0, stall_timeout=30.
 
 def main():
     parser = argparse.ArgumentParser(description="Run Aegean experiment")
-    parser.add_argument("config_path", help="Path to architecture config JSON")
+    parser.add_argument("config_path", help="Path to run config JSON")
     args = parser.parse_args()
 
-    node_names, client_names = load_experiment_topology(args.config_path)
+    architecture_path = load_run_config(args.config_path)
+    node_names, client_names = load_experiment_topology(architecture_path)
     logger.info("Experiment starting")
     stop_docker_nodes(node_names)
 
