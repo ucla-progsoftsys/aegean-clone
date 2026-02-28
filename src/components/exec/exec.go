@@ -283,8 +283,9 @@ func (e *Exec) runCoordinator() {
 			case ev = <-e.ingressCh:
 				e.applyIngressEvent(ev)
 			default:
-				e.drainBufferedMessages()
-				goto next
+				if !e.drainBufferedMessages() {
+					goto next
+				}
 			}
 		}
 	next:
@@ -305,23 +306,18 @@ func (e *Exec) applyIngressEvent(ev ingressEvent) {
 	}
 }
 
-// drainBufferedMessages is the coordinator drain loop.
 // Only the coordinator goroutine invokes this method; that single-owner model
 // provides sequencing safety for nextBatchSeq/nextVerifySeq advancement.
-func (e *Exec) drainBufferedMessages() {
-	for {
-		progressed := false
-		if e.flushNextBatch() {
-			progressed = true
-		}
-		if e.flushNextVerify() {
-			progressed = true
-		}
-		if e.flushNextVerifyResponse() {
-			progressed = true
-		}
-		if !progressed {
-			return
-		}
+func (e *Exec) drainBufferedMessages() bool {
+	progressed := false
+	if e.flushNextBatch() {
+		progressed = true
 	}
+	if e.flushNextVerify() {
+		progressed = true
+	}
+	if e.flushNextVerifyResponse() {
+		progressed = true
+	}
+	return progressed
 }
