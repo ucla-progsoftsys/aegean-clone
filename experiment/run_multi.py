@@ -10,13 +10,15 @@ import time
 
 
 def parse_oha_log(log_path):
-
+    """
+    Parse oha summary output from a node log file.
+    Returns a dict of stats, or None if no oha output found.
+    """
     with open(log_path, "r", encoding="utf-8", errors="replace") as f:
         text = f.read()
 
     stats = {}
 
-    # Summary fields
     patterns = {
         "success_rate":   r"Success rate:\s+([\d.]+)%",
         "total_sec":      r"Total:\s+([\d.]+) sec",
@@ -66,7 +68,7 @@ def find_oha_log(run_dir):
     return None
 
 
-# Stats functions
+# Stats
 def mean(values):
     return sum(values) / len(values)
 
@@ -82,11 +84,6 @@ def median(values):
     return (s[mid - 1] + s[mid]) / 2 if n % 2 == 0 else s[mid]
 
 def aggregate_runs(all_stats):
-    """
-    Given a list of per-run stat dicts, compute aggregate statistics
-    across runs for each numeric field.
-    """
-    # Collect all numeric keys (excluding histogram and status_codes)
     keys = set()
     for s in all_stats:
         for k, v in s.items():
@@ -145,7 +142,6 @@ def print_summary(aggregated, num_runs):
         if key in aggregated:
             fmt_row(label, aggregated[key])
 
-    # Distribution section
     dist_keys = [k for k in aggregated if k.startswith("p") and k not in dict(priority_keys)]
     if dist_keys:
         print()
@@ -241,12 +237,15 @@ def main():
             print(f"  WARNING: could not parse oha stats from {log_file}")
             continue
 
+        def fmt(val, decimals=4):
+            return f"{val:.{decimals}f}" if isinstance(val, (int, float)) else "?"
+
         print(f"\n  Run {i} results (from {os.path.basename(log_file)}):")
-        print(f"    p50={stats.get('p50', '?'):.4f}s  "
-              f"p90={stats.get('p90', '?'):.4f}s  "
-              f"p99={stats.get('p99', '?'):.4f}s  "
-              f"avg={stats.get('average_sec', '?'):.4f}s  "
-              f"rps={stats.get('requests_sec', '?'):.1f}")
+        print(f"    p50={fmt(stats.get('p50'))}s  "
+              f"p90={fmt(stats.get('p90'))}s  "
+              f"p99={fmt(stats.get('p99'))}s  "
+              f"avg={fmt(stats.get('average_sec'))}s  "
+              f"rps={fmt(stats.get('requests_sec'), 1)}")
 
         all_stats.append(stats)
         run_dirs.append(run_dir)
@@ -274,7 +273,12 @@ def main():
         "per_run": all_stats,
         "aggregated": aggregated,
     }
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+    out_dir = os.path.dirname(out_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
+
     with open(out_path, "w") as f:
         json.dump(output, f, indent=2)
     print(f"  Results saved to: {out_path}\n")
