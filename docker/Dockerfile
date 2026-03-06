@@ -1,5 +1,6 @@
 # Dockerfile for Aegean nodes
-FROM golang:1.23
+# Use linux/amd64 because wrk2 may not support default architecture
+FROM --platform=linux/amd64 golang:1.23
 
 # Fix bad proxy / caching issues for apt
 RUN mkdir -p /etc/apt/apt.conf.d && \
@@ -14,6 +15,11 @@ RUN apt-get update && apt-get install -y \
     openssh-server \
     ca-certificates \
     wget \
+    git \
+    make \
+    build-essential \
+    libssl-dev \
+    zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install oha (prebuilt release binary; supports linux/amd64 + linux/arm64)
@@ -27,6 +33,30 @@ RUN set -eux; \
     wget -O /usr/local/bin/oha "https://github.com/hatoo/oha/releases/latest/download/${asset}"; \
     chmod +x /usr/local/bin/oha; \
     oha --version
+
+# Install system LuaJIT 2.1
+RUN apt-get update && apt-get install -y \
+    luajit \
+    libluajit-5.1-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install wrk2 from source, but use system LuaJIT instead of vendored LuaJIT
+# Otherwise, you may get the error: ./luajit: cannot create state: not enough memory
+# Because wrk2 hardcodes to use LuaJIT 2.0.5
+RUN set -eux; \
+    git clone https://github.com/giltene/wrk2.git /tmp/wrk2; \
+    cd /tmp/wrk2; \
+    cp Makefile Makefile.bak; \
+    sed -i 's#^WITH_LUAJIT *=.*#WITH_LUAJIT := /usr#g' Makefile; \
+    sed -i 's#^WITH_LUA *=.*#WITH_LUA := /usr#g' Makefile; \
+    sed -i 's#deps/luajit/src/libluajit.a#/usr/lib/x86_64-linux-gnu/libluajit-5.1.so#g' Makefile; \
+    sed -i "s#cd \$(LDIR) && ./luajit -b#$(command -v luajit) -b#g" Makefile; \
+    make; \
+    cp /tmp/wrk2/wrk /usr/local/bin/wrk2; \
+    chmod +x /usr/local/bin/wrk2; \
+    /usr/local/bin/wrk2 --version || true; \
+    rm -rf /tmp/wrk2
 
 # Ensure `go` resolves even in shells with a minimal PATH
 RUN ln -sf /usr/local/go/bin/go /usr/bin/go
