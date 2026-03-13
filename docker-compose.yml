@@ -16,8 +16,7 @@ x-node-common: &node-common
   networks:
     - aegean-net
   volumes:
-    - ./src:/app/src
-    - ./experiment:/app/experiment
+    - .:/app
   extra_hosts:
     - "node1:10.0.0.10"
     - "node2:10.0.0.11"
