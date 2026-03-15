@@ -5,7 +5,6 @@ import (
 )
 
 type parallelBatchRuntime struct {
-	batchSeq int
 	requests []*scheduledRequest
 	finished int
 	nextReq  int
@@ -144,7 +143,7 @@ func (s *execScheduler) initParallelBatchRuntimes(parallelBatches [][]map[string
 	}
 	batches := make([]*parallelBatchRuntime, 0, len(parallelBatches))
 	allScheduled := make([]*scheduledRequest, 0)
-	for batchIdx, batchRequests := range parallelBatches {
+	for _, batchRequests := range parallelBatches {
 		scheduled := make([]*scheduledRequest, 0, len(batchRequests))
 		for reqIdx, req := range batchRequests {
 			scheduledReq := &scheduledRequest{
@@ -157,7 +156,6 @@ func (s *execScheduler) initParallelBatchRuntimes(parallelBatches [][]map[string
 			allScheduled = append(allScheduled, scheduledReq)
 		}
 		batches = append(batches, &parallelBatchRuntime{
-			batchSeq: batchIdx,
 			requests: scheduled,
 		})
 	}
