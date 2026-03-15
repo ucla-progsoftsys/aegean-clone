@@ -60,7 +60,7 @@ def load_experiment_topology(architecture_path):
 
 
 def _scp(node_name, remote_path, local_path):
-    return subprocess.run(["scp", f"{node_name}:{remote_path}", local_path], check=False)
+    return subprocess.run(["scp", *_ssh_options(), f"{node_name}:{remote_path}", local_path], check=False)
 
 
 def create_results_run_dir(results_dir="results"):
@@ -105,20 +105,36 @@ def _ssh(node_name, remote_args, **kwargs):
         **kwargs,
     )
 
+
+def _ssh_shell(node_name, command, **kwargs):
+    remote_command = f"bash -lc {shlex.quote(command)}"
+    return subprocess.run(
+        ["ssh", *_ssh_options(), node_name, remote_command],
+        check=False,
+        **kwargs,
+    )
+
+
 def launch_nodes(node_names, config_path):
     logger.info("Launching %d nodes", len(node_names))
-    remote_config_path = f"../{config_path}"
-    quoted_config_path = shlex.quote(remote_config_path)
+    remote_config_path = shlex.quote(f"../{config_path}")
     for name in node_names:
-        subprocess.run(["ssh", name, "sh", "-lc",
-                        "'cd /app/src && "
-                        f"nohup go run . --name {name} --host 0.0.0.0 --port 8000 --config {quoted_config_path} "
-                        "> /tmp/node.log 2>&1 &'"])
+        _ssh_shell(
+            name,
+            (
+                "cd /app/src || exit 1; "
+                f"nohup go run . --name {shlex.quote(name)} "
+                "--host 0.0.0.0 "
+                "--port 8000 "
+                f"--config {remote_config_path} "
+                "> /tmp/node.log 2>&1 &"
+            ),
+        )
 
 def stop_docker_nodes(node_names):
     logger.info("Stopping %d nodes", len(node_names))
     for name in node_names:
-        subprocess.run(["ssh", name, "pkill -9 -f 'go'"])
+        subprocess.run(["ssh", name, "pkill", "-9", "-f", "go"])
 
 
 def get_node_ready(node_name):
@@ -340,7 +356,11 @@ def collect_pprof(run_dir, pprof_nodes):
     ]
     for node_name in pprof_nodes:
         for suffix in suffixes:
-            _scp(node_name, f"/tmp/{node_name}-{suffix}", os.path.join(pprof_dir, f"{node_name}-{suffix}"))
+            _scp(
+                node_name,
+                f"/tmp/{node_name}-{suffix}",
+                os.path.join(pprof_dir, f"{node_name}-{suffix}"),
+            )
 
 
 def main():
