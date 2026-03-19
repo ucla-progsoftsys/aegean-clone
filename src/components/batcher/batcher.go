@@ -35,8 +35,8 @@ func NewBatcher(name string, nextCh chan<- map[string]any, execs []string, isPri
 		isPrimary: isPrimary,
 		batch:     []map[string]any{},
 		// Tunable
-		batchSize:     10,
-		batchTimeout:  10 * time.Millisecond,
+		batchSize:     40,
+		batchTimeout:  20 * time.Millisecond,
 		lastBatchTime: time.Now(),
 	}
 	return b
