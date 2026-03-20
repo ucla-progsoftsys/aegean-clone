@@ -2,10 +2,10 @@ import argparse
 import json
 import logging
 import os
+import glob
 import shlex
 import subprocess
 import time
-from datetime import datetime
 
 from tqdm import tqdm
 
@@ -92,9 +92,29 @@ def _scp(node_name, remote_path, local_path):
     return subprocess.run(["scp", *_ssh_options(), f"{node_name}:{remote_path}", local_path], check=False)
 
 
-def create_results_run_dir(results_dir="results"):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join(results_dir, timestamp)
+def list_run_config_paths(runs_dir=None):
+    if runs_dir is None:
+        runs_dir = os.path.join(REPO_ROOT, "experiment", "runs")
+
+    patterns = [
+        os.path.join(runs_dir, "*.json"),
+        os.path.join(runs_dir, "*", "*.json"),
+    ]
+
+    run_config_paths = []
+    for pattern in patterns:
+        run_config_paths.extend(glob.glob(pattern))
+
+    return sorted(os.path.abspath(path) for path in run_config_paths)
+
+
+def create_results_run_dir(relative_run_config_path, results_dir="results"):
+    results_root = os.path.join(REPO_ROOT, results_dir)
+    run_config_relpath = os.path.relpath(
+        os.path.abspath(os.path.join(REPO_ROOT, relative_run_config_path)),
+        os.path.join(REPO_ROOT, "experiment", "runs"),
+    )
+    run_dir = os.path.join(results_root, os.path.splitext(run_config_relpath)[0])
     os.makedirs(run_dir, exist_ok=True)
     return run_dir
 
@@ -392,16 +412,10 @@ def collect_pprof(run_dir, pprof_nodes):
             )
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Run Aegean experiment")
-    parser.add_argument("config_path", help="Path to run config JSON")
-    args = parser.parse_args()
-
-    _, relative_run_config_path, architecture_path, run_config = load_run_config(
-        args.config_path
-    )
+def run_experiment(config_path):
+    _, relative_run_config_path, architecture_path, run_config = load_run_config(config_path)
     node_names, client_names, pprof_nodes = load_experiment_topology(architecture_path)
-    run_dir = create_results_run_dir()
+    run_dir = create_results_run_dir(relative_run_config_path)
 
     cpu_profile_max_seconds = int(
         run_config.get("pprof_cpu_max_seconds", run_config.get("pprof_cpu_seconds", 24 * 60 * 60))
@@ -409,7 +423,7 @@ def main():
     cpu_profile_wait_slack_seconds = int(run_config.get("pprof_cpu_wait_slack_seconds", 10))
     collect_pprof_enabled = bool(run_config.get("collect_pprof", True))
 
-    logger.info("Experiment starting")
+    logger.info("Experiment starting: %s", relative_run_config_path)
     stop_docker_nodes(node_names)
 
     launch_nodes(node_names, relative_run_config_path)
@@ -446,7 +460,33 @@ def main():
     collect_logs(run_dir, node_names, client_names)
     if collect_pprof_enabled:
         collect_pprof(run_dir, pprof_nodes)
-    logger.info("Experiment complete")
+    logger.info("Experiment complete: %s -> %s", relative_run_config_path, run_dir)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Run Aegean experiment")
+    parser.add_argument("config_path", nargs="?", help="Path to run config JSON")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Run all configs under experiment/runs and experiment/runs/*",
+    )
+    args = parser.parse_args()
+
+    if args.all:
+        if args.config_path:
+            parser.error("config_path cannot be used with --all")
+        config_paths = list_run_config_paths()
+        if not config_paths:
+            parser.error("no run configs found under experiment/runs")
+        for config_path in config_paths:
+            run_experiment(config_path)
+        return
+
+    if not args.config_path:
+        parser.error("config_path is required unless --all is used")
+
+    run_experiment(args.config_path)
 
 
 if __name__ == "__main__":
