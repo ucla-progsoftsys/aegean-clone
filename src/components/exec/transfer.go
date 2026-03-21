@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"aegean/common"
+	netx "aegean/net"
 )
 
 func (e *Exec) requestStateTransferWithRetry(minStableSeq int, maxAttempts int, initialBackoff time.Duration) bool {
@@ -51,7 +52,7 @@ func (e *Exec) requestStateTransfer(minStableSeq int, _ int) bool {
 			"known_leaf_hashes": knownLeafHashes,
 		}
 
-		response, err := common.SendMessage(sourceExec, 8000, requestMsg)
+		response, err := netx.SendMessage(sourceExec, 8000, requestMsg)
 		if err != nil {
 			continue
 		}

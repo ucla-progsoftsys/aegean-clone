@@ -1,8 +1,8 @@
 package aegeanworkflow
 
 import (
-	"aegean/common"
 	"aegean/components/exec"
+	netx "aegean/net"
 	"sync"
 )
 
@@ -58,7 +58,7 @@ func executeFanoutBase(e *exec.Exec, request map[string]any, ndSeed int64, ndTim
 			}
 			go func(target string, outgoing map[string]any) {
 				defer wg.Done()
-				_, err := common.SendMessage(target, 8000, outgoing)
+				_, err := netx.SendMessage(target, 8000, outgoing)
 				if err != nil {
 				}
 			}(target, outgoing)

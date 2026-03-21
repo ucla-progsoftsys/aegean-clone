@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"aegean/common"
+	netx "aegean/net"
 )
 
 // Batcher groups client requests into ordered batches as described in Eve's execution stage
@@ -85,7 +86,7 @@ func (b *Batcher) flushBatchLocked() {
 			b.NextCh <- message
 			continue
 		}
-		_, _ = common.SendMessage(execNode, 8000, message)
+		_, _ = netx.SendMessage(execNode, 8000, message)
 	}
 }
 

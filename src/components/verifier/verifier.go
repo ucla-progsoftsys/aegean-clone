@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"aegean/common"
+	netx "aegean/net"
 )
 
 type Verifier struct {
@@ -106,7 +107,7 @@ func (v *Verifier) sendToVerifiers(msg map[string]any) {
 		if verifierNode == v.Name {
 			continue
 		}
-		if _, err := common.SendMessage(verifierNode, 8000, msg); err != nil {
+		if _, err := netx.SendMessage(verifierNode, 8000, msg); err != nil {
 		}
 	}
 }
@@ -126,7 +127,7 @@ func (v *Verifier) sendVerifyResponse(seqNum int, view int, token string, forceS
 			v.ExecCh <- response
 			continue
 		}
-		if _, err := common.SendMessage(execNode, 8000, response); err != nil {
+		if _, err := netx.SendMessage(execNode, 8000, response); err != nil {
 		}
 	}
 }

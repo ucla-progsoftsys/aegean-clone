@@ -2,6 +2,7 @@ package nodes
 
 import (
 	"aegean/common"
+	netx "aegean/net"
 	"fmt"
 	"sync"
 	"time"
@@ -120,7 +121,7 @@ func (c *Client) WaitForNodesReady(nodeNames []string) {
 	for {
 		allReady := true
 		for _, nodeName := range nodeNames {
-			response, err := common.SendMessageToPath(nodeName, 8000, "/ready", map[string]any{})
+			response, err := netx.SendMessageToPath(nodeName, 8000, "/ready", map[string]any{})
 			if err != nil {
 				allReady = false
 				break

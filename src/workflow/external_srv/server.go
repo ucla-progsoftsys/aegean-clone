@@ -1,8 +1,8 @@
 package externalsrvworkflow
 
 import (
-	"aegean/common"
 	"aegean/components/exec"
+	netx "aegean/net"
 )
 
 func ExecuteRequestServer(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
@@ -30,7 +30,7 @@ func ExecuteRequestServer(e *exec.Exec, request map[string]any, ndSeed int64, nd
 	}
 
 	// TODO: This should be 2 stages
-	externalResp, err := common.SendMessage(externalServiceNode, 8000, externalReq)
+	externalResp, err := netx.SendMessage(externalServiceNode, 8000, externalReq)
 	if err != nil {
 		return map[string]any{
 			"request_id": requestID,

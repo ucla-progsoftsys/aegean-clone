@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"aegean/common"
+	netx "aegean/net"
 )
 
 func TestNewNode(t *testing.T) {
@@ -47,7 +47,7 @@ func TestNodeStart(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Send a request
-	result, err := common.SendMessage("127.0.0.1", port, map[string]any{"msg": "hello"})
+	result, err := netx.SendMessage("127.0.0.1", port, map[string]any{"msg": "hello"})
 	if err != nil {
 		t.Fatalf("failed to send message: %v", err)
 	}

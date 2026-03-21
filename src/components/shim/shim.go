@@ -2,6 +2,7 @@ package shim
 
 import (
 	"aegean/common"
+	netx "aegean/net"
 )
 
 type Shim struct {
@@ -89,7 +90,7 @@ func (s *Shim) HandleOutgoingResponse(payload map[string]any) map[string]any {
 	// TODO: Or do we wait for a quorum, and then broadcast
 
 	for _, client := range s.Clients {
-		if _, err := common.SendMessage(client, 8000, fullResponse); err != nil {
+		if _, err := netx.SendMessage(client, 8000, fullResponse); err != nil {
 			continue
 		}
 	}

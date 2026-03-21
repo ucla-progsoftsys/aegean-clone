@@ -3,7 +3,7 @@ package exec
 import (
 	"log"
 
-	"aegean/common"
+	netx "aegean/net"
 )
 
 func (e *Exec) flushNextVerify() bool {
@@ -65,7 +65,7 @@ func (e *Exec) flushNextVerify() bool {
 				e.VerifierCh <- verifyMsg
 				continue
 			}
-			_, _ = common.SendMessage(verifier, 8000, verifyMsg)
+			_, _ = netx.SendMessage(verifier, 8000, verifyMsg)
 		}
 		return true
 	}

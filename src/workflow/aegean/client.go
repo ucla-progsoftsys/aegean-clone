@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"aegean/common"
+	netx "aegean/net"
 	"aegean/nodes"
 )
 
@@ -51,7 +52,7 @@ func runClientRequestLogic(c *nodes.Client, waitForResponse bool) {
 
 		sent := false
 		for _, nextNode := range c.Next {
-			_, err := common.SendMessage(nextNode, 8000, request)
+			_, err := netx.SendMessage(nextNode, 8000, request)
 			if err != nil {
 				_ = c.TraceLogger.WriteTrace(map[string]any{
 					"type":            "request",

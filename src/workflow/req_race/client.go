@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"aegean/common"
+	netx "aegean/net"
 	"aegean/nodes"
 )
 
@@ -23,7 +24,7 @@ func ClientRequestLogic(c *nodes.Client) {
 			"op_payload": map[string]any{},
 		}
 		for _, nextNode := range c.Next {
-			_, err := common.SendMessage(nextNode, 8000, request)
+			_, err := netx.SendMessage(nextNode, 8000, request)
 			if err != nil {
 			}
 		}

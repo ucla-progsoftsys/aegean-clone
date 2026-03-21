@@ -3,6 +3,7 @@ package supersimpleworkflow
 import (
 	"aegean/common"
 	"aegean/components/exec"
+	netx "aegean/net"
 	"math/rand/v2"
 )
 
@@ -100,7 +101,7 @@ func dispatchNestedRequest(e *exec.Exec, request map[string]any) {
 		}
 
 		if rand.Float64() < forward_prob {
-			common.SendMessage(target, 8000, outgoing)
+			_, _ = netx.SendMessage(target, 8000, outgoing)
 		}
 	}
 }

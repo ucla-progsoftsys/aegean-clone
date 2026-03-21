@@ -2,6 +2,7 @@ package nodes
 
 import (
 	"aegean/common"
+	netx "aegean/net"
 	"fmt"
 	"log"
 	"sync"
@@ -87,7 +88,7 @@ func (c *OHAClient) handleRequest(payload map[string]any) map[string]any {
 	results := make(chan sendResult, len(c.Next))
 	for _, nextNode := range c.Next {
 		go func(target string) {
-			response, err := common.SendMessage(target, 8000, outgoing)
+			response, err := netx.SendMessage(target, 8000, outgoing)
 			results <- sendResult{node: target, response: response, err: err}
 		}(nextNode)
 	}

@@ -2,11 +2,9 @@ package nodes
 
 import (
 	"fmt"
-	"net/http"
-	"net/http/pprof"
-	"runtime"
+	"net"
 
-	"aegean/common"
+	netx "aegean/net"
 )
 
 // Node is a base class that handles HTTP requests
@@ -14,22 +12,14 @@ type Node struct {
 	Name   string
 	Host   string
 	Port   int
-	server *http.Server
-	// EnablePprof exposes net/http pprof handlers under /debug/pprof/.
-	EnablePprof bool
-	// BlockProfileRate controls runtime block profiling.
-	// See runtime.SetBlockProfileRate.
-	BlockProfileRate int
-	// MutexProfileFraction controls runtime mutex profiling.
-	// See runtime.SetMutexProfileFraction.
-	MutexProfileFraction int
+	server net.Listener
 
 	// HandleMessage must be set by embedding types to process requests.
-	HandleMessage common.MessageHandler
+	HandleMessage netx.MessageHandler
 	// HandleProgress is mounted on /progress and mirrors HandleMessage semantics.
-	HandleProgress common.MessageHandler
+	HandleProgress netx.MessageHandler
 	// HandleReady is mounted on /ready and mirrors HandleMessage semantics.
-	HandleReady common.MessageHandler
+	HandleReady netx.MessageHandler
 }
 
 func NewNode(name, host string, port int) *Node {
@@ -51,41 +41,23 @@ func (n *Node) Start() {
 	}
 
 	addr := fmt.Sprintf("%s:%d", n.Host, n.Port)
-
-	mux := http.NewServeMux()
-	mux.Handle("/", common.MakeHandler(n.HandleMessage))
+	handlers := map[string]netx.MessageHandler{
+		"/": n.HandleMessage,
+	}
 	if n.HandleProgress != nil {
-		mux.Handle("/progress", common.MakeHandler(n.HandleProgress))
+		handlers["/progress"] = n.HandleProgress
 	}
 	if n.HandleReady != nil {
-		mux.Handle("/ready", common.MakeHandler(n.HandleReady))
-	}
-	if n.EnablePprof {
-		if n.BlockProfileRate > 0 {
-			runtime.SetBlockProfileRate(n.BlockProfileRate)
-		}
-		if n.MutexProfileFraction > 0 {
-			runtime.SetMutexProfileFraction(n.MutexProfileFraction)
-		}
-		n.registerPprofHandlers(mux)
+		handlers["/ready"] = n.HandleReady
 	}
 
-	n.server = &http.Server{Addr: addr, Handler: mux}
-	if err := n.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		panic(fmt.Sprintf("Node %s failed to listen: %v", n.Name, err))
+	}
+	n.server = listener
+
+	if err := netx.ServeTCP(listener, handlers); err != nil {
 		panic(fmt.Sprintf("Node %s failed: %v", n.Name, err))
 	}
-}
-
-func (n *Node) registerPprofHandlers(mux *http.ServeMux) {
-	mux.HandleFunc("/debug/pprof/", pprof.Index)
-	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-	mux.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
-	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
-	mux.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
-	mux.Handle("/debug/pprof/heap", pprof.Handler("heap"))
-	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
-	mux.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
 }

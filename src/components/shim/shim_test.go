@@ -2,46 +2,44 @@ package shim
 
 import (
 	"net"
-	"net/http"
 	"testing"
 	"time"
 
-	"aegean/common"
+	netx "aegean/net"
 )
 
 type shimTestServer struct {
-	server   *http.Server
 	listener net.Listener
 	received chan map[string]any
 }
 
 func startShimTestServer(t *testing.T) *shimTestServer {
 	t.Helper()
+	netx.ResetNetworkConnections()
 	listener, err := net.Listen("tcp", "127.0.0.1:8000")
 	if err != nil {
 		t.Fatalf("failed to listen on 127.0.0.1:8000: %v", err)
 	}
 
 	ts := &shimTestServer{
-		server:   &http.Server{},
 		listener: listener,
 		received: make(chan map[string]any, 64),
 	}
 
-	ts.server.Handler = common.MakeHandler(func(req map[string]any) map[string]any {
-		ts.received <- req
-		return map[string]any{"status": "ok"}
-	})
-
 	go func() {
-		_ = ts.server.Serve(listener)
+		_ = netx.ServeTCP(listener, map[string]netx.MessageHandler{
+			"/": func(req map[string]any) map[string]any {
+				ts.received <- req
+				return map[string]any{"status": "ok"}
+			},
+		})
 	}()
 
 	return ts
 }
 
 func (ts *shimTestServer) close() {
-	_ = ts.server.Close()
+	netx.ResetNetworkConnections()
 	_ = ts.listener.Close()
 }
 
