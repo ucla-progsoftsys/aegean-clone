@@ -1,26 +1,16 @@
 {
   "services": {
-    "client": {
-      "type": "client",
-      "next": ["node1", "node2", "node3"],
-      "client_workflow": "aegean_pipelined"
-    },
     "oha_client": {
       "type": "oha_client",
       "next": ["node1", "node2", "node3"],
-      "client_workflow": "aegean_oha_client"
+      "client_workflow": "supersimple_oha_client"
     },
-    "k6_client": {
-      "type": "k6_client",
-      "next": ["node1", "node2", "node3"],
-      "client_workflow": "aegean_k6_client"
-    },
-    "middle": {
+    "server": {
       "type": "server",
       "clients": ["node0"],
       "nodes": ["node1", "node2", "node3"],
-      "exec_workflow": "aegean_backend",
-      "init_state_workflow": "aegean_default",
+      "exec_workflow": "supersimple_server",
+      "init_state_workflow": "supersimple_default",
       "shimQuorumSize": 1,
       "verifyResponseQuorumSize": 1,
       "execVerifyQuorumSize": 2,
@@ -33,15 +23,15 @@
       "service": "oha_client"
     },
     "node1": {
-      "service": "middle",
+      "service": "server",
       "is_primary_batcher": true
     },
     "node2": {
-      "service": "middle",
+      "service": "server",
       "is_primary_batcher": false
     },
     "node3": {
-      "service": "middle",
+      "service": "server",
       "is_primary_batcher": false
     }
   }
