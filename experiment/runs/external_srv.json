@@ -8,5 +8,5 @@
   "batch_timeout_ms": 20,
   "parallel_window_k": 4,
   "worker_count": 4,
-  "gomaxprocs": 4
+  "gomaxprocs": 40
 }
