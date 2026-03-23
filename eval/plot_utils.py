@@ -10,7 +10,16 @@ except ModuleNotFoundError as exc:
 
 
 THROUGHPUT_RE = re.compile(r"http_reqs\.*:\s+\d+\s+([0-9.]+)/s")
-LATENCY_RE = re.compile(r"http_req_duration\.*:.*?\bmed=([0-9.]+)ms\b.*?\bp\(90\)=([0-9.]+)ms\b")
+LATENCY_RE = re.compile(
+    r"http_req_duration\.*:.*?\bmed=([0-9.]+)(ms|s)\b.*?\bp\(90\)=([0-9.]+)(ms|s)\b"
+)
+
+
+def duration_to_ms(value: str, unit: str) -> float:
+    duration = float(value)
+    if unit == "s":
+        return duration * 1000
+    return duration
 
 
 def parse_metric_log(log_path: Path, x_axis_re: re.Pattern[str]) -> tuple[float, float, float, float]:
@@ -29,8 +38,8 @@ def parse_metric_log(log_path: Path, x_axis_re: re.Pattern[str]) -> tuple[float,
 
     x_axis_value = float(x_axis_match.group(1))
     throughput = float(throughput_match.group(1))
-    median_ms = float(latency_match.group(1))
-    p90_ms = float(latency_match.group(2))
+    median_ms = duration_to_ms(latency_match.group(1), latency_match.group(2))
+    p90_ms = duration_to_ms(latency_match.group(3), latency_match.group(4))
     return x_axis_value, throughput, median_ms, p90_ms
 
 
