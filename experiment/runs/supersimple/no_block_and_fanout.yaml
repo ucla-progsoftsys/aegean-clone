@@ -1,0 +1,18 @@
+---
+architecture: supersimple.yaml
+
+# K6 configs
+duration: 15s
+k6_vus: 50
+
+# Supersimple workflow configs
+supersimple_nesres_block: false
+supersimple_forward_prob: 1.0
+
+# Run & system configs
+run_timeout_seconds: 20
+batch_size: 40
+batch_timeout_ms: 20
+parallel_window_k: 4
+worker_count: 4
+gomaxprocs: 4

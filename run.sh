@@ -1,2 +1,1 @@
-rm -rf results/*
-python main.py experiment/runs/aegean.json
+python main.py experiment/runs/aegean.yaml

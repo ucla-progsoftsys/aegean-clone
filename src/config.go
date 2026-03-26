@@ -3,9 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
+
+	"gopkg.in/yaml.v3"
 )
 
 type NodeConfig struct {
@@ -34,18 +35,16 @@ type RunConfig struct {
 }
 
 func loadConfig(path string) (map[string]NodeConfig, error) {
-	data, err := os.ReadFile(path)
+	rawRoot, err := loadObjectFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read config %s: %w", path, err)
+		return nil, err
 	}
 
-	type layeredConfig struct {
-		Services map[string]json.RawMessage `json:"services"`
-		Nodes    map[string]json.RawMessage `json:"nodes"`
-	}
-
-	var layered layeredConfig
-	if err := json.Unmarshal(data, &layered); err != nil {
+	layered := struct {
+		Services map[string]any
+		Nodes    map[string]any
+	}{}
+	if err := decodeViaJSON(rawRoot, &layered); err != nil {
 		return nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
 	if len(layered.Services) == 0 {
@@ -57,7 +56,7 @@ func loadConfig(path string) (map[string]NodeConfig, error) {
 
 	cfg := make(map[string]NodeConfig, len(layered.Nodes))
 	for nodeName, rawNode := range layered.Nodes {
-		nodeMap, err := decodeObject(rawNode)
+		nodeMap, err := asObject(rawNode)
 		if err != nil {
 			return nil, fmt.Errorf("parse node %q: %w", nodeName, err)
 		}
@@ -72,7 +71,7 @@ func loadConfig(path string) (map[string]NodeConfig, error) {
 			return nil, fmt.Errorf("node %q references unknown service %q", nodeName, serviceName)
 		}
 
-		serviceMap, err := decodeObject(serviceRaw)
+		serviceMap, err := asObject(serviceRaw)
 		if err != nil {
 			return nil, fmt.Errorf("parse service %q: %w", serviceName, err)
 		}
@@ -85,13 +84,8 @@ func loadConfig(path string) (map[string]NodeConfig, error) {
 			merged[k] = v
 		}
 
-		b, err := json.Marshal(merged)
-		if err != nil {
-			return nil, fmt.Errorf("marshal merged config for node %q: %w", nodeName, err)
-		}
-
 		var nodeCfg NodeConfig
-		if err := json.Unmarshal(b, &nodeCfg); err != nil {
+		if err := decodeViaJSON(merged, &nodeCfg); err != nil {
 			return nil, fmt.Errorf("decode merged config for node %q: %w", nodeName, err)
 		}
 
@@ -102,17 +96,12 @@ func loadConfig(path string) (map[string]NodeConfig, error) {
 }
 
 func loadRunConfig(path string) (RunConfig, error) {
-	data, err := os.ReadFile(path)
+	raw, err := loadObjectFile(path)
 	if err != nil {
-		return RunConfig{}, fmt.Errorf("read run config %s: %w", path, err)
-	}
-
-	var raw map[string]any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return RunConfig{}, fmt.Errorf("parse run config %s: %w", path, err)
+		return RunConfig{}, err
 	}
 	if raw == nil {
-		return RunConfig{}, fmt.Errorf("run config %s must be a JSON object", path)
+		return RunConfig{}, fmt.Errorf("run config %s must be an object", path)
 	}
 
 	architecture, _ := raw["architecture"].(string)
@@ -161,13 +150,43 @@ func resolveArchitecturePath(runConfigPath, architecture string) (string, error)
 	)
 }
 
-func decodeObject(raw json.RawMessage) (map[string]any, error) {
+func loadObjectFile(path string) (map[string]any, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read config %s: %w", path, err)
+	}
+
 	var obj map[string]any
-	if err := json.Unmarshal(raw, &obj); err != nil {
-		return nil, err
+	switch ext := filepath.Ext(path); ext {
+	case ".yaml", ".yml":
+		if err := yaml.Unmarshal(data, &obj); err != nil {
+			return nil, fmt.Errorf("parse config %s: %w", path, err)
+		}
+	default:
+		if err := json.Unmarshal(data, &obj); err != nil {
+			return nil, fmt.Errorf("parse config %s: %w", path, err)
+		}
 	}
 	if obj == nil {
-		return nil, fmt.Errorf("expected object")
+		return nil, fmt.Errorf("config %s must be an object", path)
+	}
+	return obj, nil
+}
+
+func asObject(raw any) (map[string]any, error) {
+	obj, ok := raw.(map[string]any)
+	if ok && obj != nil {
+		return obj, nil
+	}
+
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	obj = map[string]any{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return nil, err
 	}
 	return obj, nil
 }
@@ -178,10 +197,67 @@ func requirePositiveIntegerField(raw map[string]any, field string) error {
 		return fmt.Errorf("missing required field %q", field)
 	}
 
-	number, ok := value.(float64)
-	if !ok || number <= 0 || math.Trunc(number) != number {
+	if _, ok := asPositiveInt(value); !ok {
 		return fmt.Errorf("field %q must be a positive integer", field)
 	}
 
 	return nil
+}
+
+func decodeViaJSON(input any, out any) error {
+	b, err := json.Marshal(input)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, out)
+}
+
+func asPositiveInt(value any) (int64, bool) {
+	switch n := value.(type) {
+	case int:
+		if n > 0 {
+			return int64(n), true
+		}
+	case int8:
+		if n > 0 {
+			return int64(n), true
+		}
+	case int16:
+		if n > 0 {
+			return int64(n), true
+		}
+	case int32:
+		if n > 0 {
+			return int64(n), true
+		}
+	case int64:
+		if n > 0 {
+			return n, true
+		}
+	case uint:
+		if n > 0 {
+			return int64(n), true
+		}
+	case uint8:
+		if n > 0 {
+			return int64(n), true
+		}
+	case uint16:
+		if n > 0 {
+			return int64(n), true
+		}
+	case uint32:
+		if n > 0 {
+			return int64(n), true
+		}
+	case uint64:
+		if n > 0 && n <= uint64(^uint64(0)>>1) {
+			return int64(n), true
+		}
+	case float64:
+		if n > 0 && n == float64(int64(n)) {
+			return int64(n), true
+		}
+	}
+	return 0, false
 }

@@ -18,13 +18,13 @@ func TestLoadRunConfigResolvesArchitectureSiblingToRunsDir(t *testing.T) {
 		t.Fatalf("mkdir run dir: %v", err)
 	}
 
-	architecturePath := filepath.Join(architectureDir, "basic_oha.json")
-	if err := os.WriteFile(architecturePath, []byte(`{"services":{"svc":{"type":"client"}},"nodes":{"node0":{"service":"svc"}}}`), 0o644); err != nil {
+	architecturePath := filepath.Join(architectureDir, "basic_oha.yaml")
+	if err := os.WriteFile(architecturePath, []byte("services:\n  svc:\n    type: client\nnodes:\n  node0:\n    service: svc\n"), 0o644); err != nil {
 		t.Fatalf("write architecture config: %v", err)
 	}
 
-	runConfigPath := filepath.Join(runDir, "worker_4.json")
-	if err := os.WriteFile(runConfigPath, []byte(`{"architecture":"basic_oha.json","worker_count":4,"run_timeout_seconds":30}`), 0o644); err != nil {
+	runConfigPath := filepath.Join(runDir, "worker_4.yaml")
+	if err := os.WriteFile(runConfigPath, []byte("architecture: basic_oha.yaml\nworker_count: 4\nrun_timeout_seconds: 30\n"), 0o644); err != nil {
 		t.Fatalf("write run config: %v", err)
 	}
 
@@ -36,10 +36,10 @@ func TestLoadRunConfigResolvesArchitectureSiblingToRunsDir(t *testing.T) {
 	if cfg.Architecture != architecturePath {
 		t.Fatalf("architecture path = %q, want %q", cfg.Architecture, architecturePath)
 	}
-	if got := cfg.Params["worker_count"]; got != float64(4) {
+	if got := cfg.Params["worker_count"]; got != 4 {
 		t.Fatalf("worker_count = %#v, want 4", got)
 	}
-	if got := cfg.Params["run_timeout_seconds"]; got != float64(30) {
+	if got := cfg.Params["run_timeout_seconds"]; got != 30 {
 		t.Fatalf("run_timeout_seconds = %#v, want 30", got)
 	}
 }

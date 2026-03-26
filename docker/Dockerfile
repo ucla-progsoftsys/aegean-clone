@@ -13,6 +13,7 @@ RUN mkdir -p /etc/apt/apt.conf.d && \
 RUN apt-get update && apt-get install -y \
     openssh-server \
     ca-certificates \
+    python3-yaml \
     wget \
     && rm -rf /var/lib/apt/lists/*
 

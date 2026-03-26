@@ -7,6 +7,8 @@ import shlex
 import subprocess
 import time
 
+import yaml
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -46,8 +48,7 @@ def load_run_config(run_config_path):
         run_config_path
     )
 
-    with open(resolved_run_config_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    data = load_config_file(resolved_run_config_path)
 
     architecture = data.get("architecture")
     if not architecture:
@@ -62,8 +63,7 @@ def load_run_config(run_config_path):
 
 
 def load_experiment_topology(architecture_path):
-    with open(architecture_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    data = load_config_file(architecture_path)
 
     services = data.get("services", {})
     nodes = data.get("nodes", {})
@@ -98,7 +98,11 @@ def list_run_config_paths(runs_dir=None):
 
     patterns = [
         os.path.join(runs_dir, "*.json"),
+        os.path.join(runs_dir, "*.yaml"),
+        os.path.join(runs_dir, "*.yml"),
         os.path.join(runs_dir, "*", "*.json"),
+        os.path.join(runs_dir, "*", "*.yaml"),
+        os.path.join(runs_dir, "*", "*.yml"),
     ]
 
     run_config_paths = []
@@ -255,9 +259,21 @@ def run_experiment(config_path):
     logger.info("Experiment complete: %s -> %s", relative_run_config_path, run_dir)
 
 
+def load_config_file(path):
+    with open(path, "r", encoding="utf-8") as f:
+        if path.endswith((".yaml", ".yml")):
+            data = yaml.safe_load(f)
+        else:
+            data = json.load(f)
+
+    if not isinstance(data, dict):
+        raise ValueError(f"config file must contain an object: {path}")
+    return data
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run Aegean experiment")
-    parser.add_argument("config_path", nargs="?", help="Path to run config JSON")
+    parser.add_argument("config_path", nargs="?", help="Path to run config YAML or JSON")
     parser.add_argument(
         "--all",
         action="store_true",
