@@ -2,7 +2,6 @@ package exec
 
 import (
 	"aegean/common"
-	"go.opentelemetry.io/otel/attribute"
 )
 
 type parallelBatchRuntime struct {
@@ -223,35 +222,5 @@ func (s *execScheduler) activateBatch(e *Exec, batch *parallelBatchRuntime, work
 		return
 	}
 	batch.activated = true
-	for _, req := range batch.requests {
-		outerSeq := 0
-		if seqAny, ok := e.GetRequestContextValue(req.payload["request_id"], requestBatchSeqContextKey); ok {
-			if seq, ok := seqAny.(int); ok {
-				outerSeq = seq
-			}
-		}
-		parallelBatchCount := 0
-		if countAny, ok := e.GetRequestContextValue(req.payload["request_id"], "parallel_batch_count"); ok {
-			if count, ok := countAny.(int); ok {
-				parallelBatchCount = count
-			}
-		}
-		batchRequestCount := 0
-		if countAny, ok := e.GetRequestContextValue(req.payload["request_id"], "batch_request_count"); ok {
-			if count, ok := countAny.(int); ok {
-				batchRequestCount = count
-			}
-		}
-		e.endRequestSpan(req.payload["request_id"], parallelBatchTurnWaitSpanContextKey)
-		e.startRequestDispatchWaitWithAttrs(
-			req.payload,
-			attribute.Int("batch.seq_num", outerSeq),
-			attribute.Int("batch.request_count", batchRequestCount),
-			attribute.Int("parallel_batch.index", req.batchSeq),
-			attribute.Int("parallel_batch.count", parallelBatchCount),
-			attribute.Int("parallel_batch.size", len(batch.requests)),
-			attribute.Int("parallel_batch.request_index", req.index),
-			attribute.Int("exec.worker_count", workerCount),
-		)
-	}
+	_, _ = e, workerCount
 }

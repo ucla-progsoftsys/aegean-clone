@@ -3,11 +3,11 @@ package verifier
 import (
 	"aegean/common"
 	"aegean/telemetry"
+	"context"
 )
 
 func (v *Verifier) applyPrepareMessage(payload map[string]any) map[string]any {
-	ctx, span := telemetry.StartSpanFromPayload(payload, "verifier.apply_prepare", telemetry.AttrsFromPayload(payload)...)
-	defer span.End()
+	ctx := telemetry.ExtractContext(context.Background(), payload)
 
 	seqNum := common.GetInt(payload, "seq_num")
 	token, _ := payload["token"].(string)

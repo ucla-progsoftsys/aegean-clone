@@ -8,12 +8,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-const responseEmitWaitSpanKey = "__response_emit_wait_span"
-
-func ResponseEmitWaitSpanKey() string {
-	return responseEmitWaitSpanKey
-}
-
 func (e *Exec) flushNextVerify() bool {
 	e.mu.Lock()
 	seq := e.nextVerifySeq
@@ -141,15 +135,6 @@ func (e *Exec) finalizeCommit(seqNum int, pending pendingExecResult, agreedToken
 		if requestPayload := e.requestPayloadForSeq(seqNum, requestID); requestPayload != nil {
 			telemetry.CopyContext(responseMsg, requestPayload)
 		}
-		_, emitSpan := telemetry.StartSpanFromPayload(
-			responseMsg,
-			"exec.response_emit_wait",
-			append(
-				telemetry.AttrsFromPayload(responseMsg),
-				attribute.String("node.name", e.Name),
-			)...,
-		)
-		responseMsg[responseEmitWaitSpanKey] = emitSpan
 		if e.ShimCh != nil {
 			e.ShimCh <- responseMsg
 		}

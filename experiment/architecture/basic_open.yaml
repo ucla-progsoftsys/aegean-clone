@@ -24,7 +24,7 @@ services:
     expectedExecVotes: 3
     batcher_config:
       batch_size: 40
-      batch_timeout_ms: 15
+      batch_timeout_ms: 30
   backend:
     type: server
     clients:

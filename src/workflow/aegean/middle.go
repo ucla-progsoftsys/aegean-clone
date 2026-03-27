@@ -4,17 +4,16 @@ import (
 	"aegean/components/exec"
 	netx "aegean/net"
 	"aegean/telemetry"
+	"context"
 	"sync"
 
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
 	fanoutStageContextKey        = "fanout_stage"
 	fanoutBaseResponseContextKey = "fanout_base_response"
 	fanoutWaitSpanContextKey     = "fanout_wait_span"
-	fanoutResumeSpanContextKey   = "nested_resume_span"
 
 	fanoutStageAwaitNested = "await_nested"
 )
@@ -27,9 +26,6 @@ func blockedForNested(requestID any) map[string]any {
 }
 
 func executeFanoutBase(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64, targetNodes map[string]struct{}, everyN uint64) map[string]any {
-	ctx, span := telemetry.StartSpanFromPayload(request, "workflow.middle.execute_fanout", telemetry.AttrsFromPayload(request)...)
-	defer span.End()
-
 	requestID := request["request_id"]
 	stageAny, _ := e.GetRequestContextValue(requestID, fanoutStageContextKey)
 	stage, _ := stageAny.(string)
@@ -63,14 +59,7 @@ func executeFanoutBase(e *exec.Exec, request map[string]any, ndSeed int64, ndTim
 		_ = e.SetRequestContextValue(requestID, fanoutWaitSpanContextKey, waitSpan)
 
 		fanoutTargets := []string{"node4"}
-		_, fanoutRPCSpan := telemetry.StartSpanFromPayload(
-			request,
-			"workflow.middle.fanout_rpc",
-			append(
-				telemetry.AttrsFromPayload(request),
-				attribute.String("node.name", e.Name),
-			)...,
-		)
+		ctx := telemetry.ExtractContext(context.Background(), request)
 		var wg sync.WaitGroup
 		for _, target := range fanoutTargets {
 			wg.Add(1)
@@ -85,24 +74,10 @@ func executeFanoutBase(e *exec.Exec, request map[string]any, ndSeed int64, ndTim
 			telemetry.InjectContext(ctx, outgoing)
 			go func(target string, outgoing map[string]any) {
 				defer wg.Done()
-				_, sendSpan := telemetry.StartSpanFromPayload(
-					request,
-					"workflow.middle.fanout_send",
-					append(
-						telemetry.AttrsFromPayload(request),
-						attribute.String("node.name", e.Name),
-						attribute.String("fanout.target", target),
-					)...,
-				)
-				defer sendSpan.End()
-				_, err := netx.SendMessage(target, 8000, outgoing)
-				if err != nil {
-					sendSpan.SetAttributes(attribute.Bool("fanout.error", true))
-				}
+				_, _ = netx.SendMessage(target, 8000, outgoing)
 			}(target, outgoing)
 		}
 		wg.Wait()
-		fanoutRPCSpan.End()
 		return blockedForNested(requestID)
 
 	case fanoutStageAwaitNested:
@@ -121,20 +96,14 @@ func executeFanoutBase(e *exec.Exec, request map[string]any, ndSeed int64, ndTim
 				attribute.Int("gate.next_verify_seq", nextVerifySeq(e)),
 				attribute.Int("gate.stable_seq_num", stableSeq(e)),
 			)
-			if resumeSpanAny, ok := e.GetRequestContextValue(requestID, fanoutResumeSpanContextKey); ok {
-				if resumeSpan, ok := resumeSpanAny.(trace.Span); ok && resumeSpan != nil {
-					resumeSpan.End()
-				}
-			}
 			if waitSpanAny, ok := e.GetRequestContextValue(requestID, fanoutWaitSpanContextKey); ok {
-				if waitSpan, ok := waitSpanAny.(trace.Span); ok && waitSpan != nil {
+				if waitSpan, ok := waitSpanAny.(interface{ End() }); ok && waitSpan != nil {
 					waitSpan.End()
 				}
 			}
 			e.DeleteRequestContextValue(requestID, fanoutStageContextKey)
 			e.DeleteRequestContextValue(requestID, fanoutBaseResponseContextKey)
 			e.DeleteRequestContextValue(requestID, fanoutWaitSpanContextKey)
-			e.DeleteRequestContextValue(requestID, fanoutResumeSpanContextKey)
 			return output
 		}
 		return blockedForNested(requestID)

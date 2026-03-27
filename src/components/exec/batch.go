@@ -75,17 +75,8 @@ func (e *Exec) flushNextBatch() bool {
 		for parallelBatchIdx, batch := range parallelBatches {
 			for requestIdx, request := range batch {
 				e.endRequestSpan(request["request_id"], batchBufferWaitSpanContextKey)
-				e.startRequestSpan(
-					request,
-					parallelBatchTurnWaitSpanContextKey,
-					"exec.parallel_batch_turn_wait",
-					attribute.Int("batch.seq_num", seq),
-					attribute.Int("batch.request_count", requestCount),
-					attribute.Int("parallel_batch.index", parallelBatchIdx),
-					attribute.Int("parallel_batch.size", len(batch)),
-					attribute.Int("parallel_batch.request_index", requestIdx),
-					attribute.Int("parallel_batch.count", len(parallelBatches)),
-				)
+				_ = parallelBatchIdx
+				_ = requestIdx
 			}
 		}
 		msg["_batch_service_span"] = batchServiceSpan
@@ -95,9 +86,6 @@ func (e *Exec) flushNextBatch() bool {
 }
 
 func (e *Exec) executeBatch(payload map[string]any) *batchExecutionResult {
-	_, span := telemetry.StartSpanFromPayload(payload, "exec.handle_batch", telemetry.AttrsFromPayload(payload)...)
-	defer span.End()
-
 	seqNum := common.GetInt(payload, "seq_num")
 	parallelBatchesAny, _ := payload["parallel_batches"]
 	ndSeed := common.GetInt64(payload, "nd_seed")

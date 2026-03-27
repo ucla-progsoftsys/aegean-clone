@@ -18,10 +18,7 @@ import (
 // Keep false in normal runs to avoid very large logs
 const logExecStateDetails = false
 
-const nestedResumeSpanContextKey = "nested_resume_span"
 const batchBufferWaitSpanContextKey = "batch_buffer_wait_span"
-const parallelBatchTurnWaitSpanContextKey = "parallel_batch_turn_wait_span"
-const requestDispatchWaitSpanContextKey = "request_dispatch_wait_span"
 const requestVerifyGateWaitSpanContextKey = "request_verify_gate_wait_span"
 const requestVerifyWaitSpanContextKey = "request_verify_wait_span"
 const postNestedVerifyGateWaitSpanContextKey = "post_nested_verify_gate_wait_span"
@@ -293,17 +290,6 @@ func (e *Exec) BufferNestedResponse(payload map[string]any) bool {
 	if !ok {
 		return false
 	}
-	if _, exists := e.GetRequestContextValue(requestID, nestedResumeSpanContextKey); !exists {
-		_, span := telemetry.StartSpanFromPayload(
-			payload,
-			"exec.nested_resume_wait",
-			append(
-				telemetry.AttrsFromPayload(payload),
-				attribute.String("node.name", e.Name),
-			)...,
-		)
-		_ = e.SetRequestContextValue(requestID, nestedResumeSpanContextKey, span)
-	}
 	return e.scheduler.enqueueNestedResponse(requestID, payload)
 }
 
@@ -340,59 +326,15 @@ func (e *Exec) runBatchExecutor() {
 }
 
 func (e *Exec) startRequestDispatchWait(request map[string]any) {
-	requestID, ok := canonicalRequestID(request["request_id"])
-	if !ok {
-		return
-	}
-	if _, exists := e.GetRequestContextValue(requestID, requestDispatchWaitSpanContextKey); exists {
-		return
-	}
-	_, span := telemetry.StartSpanFromPayload(
-		request,
-		"exec.request_dispatch_wait",
-		append(
-			telemetry.AttrsFromPayload(request),
-			attribute.String("node.name", e.Name),
-		)...,
-	)
-	_ = e.SetRequestContextValue(requestID, requestDispatchWaitSpanContextKey, span)
+	_ = request
 }
 
 func (e *Exec) endRequestDispatchWait(request map[string]any) {
-	requestID, ok := canonicalRequestID(request["request_id"])
-	if !ok {
-		return
-	}
-	spanAny, exists := e.GetRequestContextValue(requestID, requestDispatchWaitSpanContextKey)
-	if !exists {
-		return
-	}
-	if span, ok := spanAny.(trace.Span); ok && span != nil {
-		span.End()
-	}
-	e.DeleteRequestContextValue(requestID, requestDispatchWaitSpanContextKey)
+	_ = request
 }
 
 func (e *Exec) startRequestDispatchWaitWithAttrs(request map[string]any, attrs ...attribute.KeyValue) {
-	requestID, ok := canonicalRequestID(request["request_id"])
-	if !ok {
-		return
-	}
-	if _, exists := e.GetRequestContextValue(requestID, requestDispatchWaitSpanContextKey); exists {
-		return
-	}
-	_, span := telemetry.StartSpanFromPayload(
-		request,
-		"exec.request_dispatch_wait",
-		append(
-			append(
-				telemetry.AttrsFromPayload(request),
-				attribute.String("node.name", e.Name),
-			),
-			attrs...,
-		)...,
-	)
-	_ = e.SetRequestContextValue(requestID, requestDispatchWaitSpanContextKey, span)
+	_, _ = request, attrs
 }
 
 func (e *Exec) startRequestSpan(request map[string]any, contextKey string, spanName string, attrs ...attribute.KeyValue) {

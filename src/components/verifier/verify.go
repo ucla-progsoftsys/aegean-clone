@@ -3,6 +3,7 @@ package verifier
 import (
 	"aegean/common"
 	"aegean/telemetry"
+	"context"
 )
 
 func (v *Verifier) flushNextVerify() bool {
@@ -38,8 +39,7 @@ func (v *Verifier) flushNextVerify() bool {
 }
 
 func (v *Verifier) applyVerifyMessage(payload map[string]any) map[string]any {
-	ctx, span := telemetry.StartSpanFromPayload(payload, "verifier.apply_verify", telemetry.AttrsFromPayload(payload)...)
-	defer span.End()
+	ctx := telemetry.ExtractContext(context.Background(), payload)
 
 	seqNum := common.GetInt(payload, "seq_num")
 	token, _ := payload["token"].(string)

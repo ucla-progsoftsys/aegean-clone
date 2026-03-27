@@ -2,13 +2,9 @@ package verifier
 
 import (
 	"aegean/common"
-	"aegean/telemetry"
 )
 
 func (v *Verifier) applyCommitMessage(payload map[string]any) map[string]any {
-	_, span := telemetry.StartSpanFromPayload(payload, "verifier.apply_commit", telemetry.AttrsFromPayload(payload)...)
-	defer span.End()
-
 	seqNum := common.GetInt(payload, "seq_num")
 	token, _ := payload["token"].(string)
 	verifierID, _ := payload["verifier_id"].(string)
