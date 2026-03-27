@@ -14,9 +14,10 @@ import re
 import statistics
 from pathlib import Path
 
+from plot_utils import plot_latency, plot_throughput
+
 
 def _parse_k6_duration(value_str, unit_str):
-    """Convert a k6 duration value+unit to seconds."""
     v = float(value_str)
     unit = unit_str.lower().strip()
     if unit == "ms":
@@ -30,7 +31,6 @@ def parse_client_log(log_path):
     text = Path(log_path).read_text()
     metrics = {}
 
-    # --- Try k6 format first ---
     k6_duration_re = re.search(
         r"http_req_duration\.+:\s+"
         r"avg=([0-9.]+)(ms|s|µs|us)\s+"
@@ -61,7 +61,6 @@ def parse_client_log(log_path):
     if metrics:
         return metrics
 
-    # --- Fallback: oha-style format ---
     for key, pattern in [
         ("success_rate", r"Success rate:\s+([0-9.]+)%"),
         ("total_sec", r"Total:\s+([0-9.]+) sec"),
@@ -138,7 +137,6 @@ def load_from_run_dirs(run_dirs, client_name="node0"):
 
 
 def print_summary_table(aggregated, num_runs):
-    """Print a text summary of key metrics."""
     print(f"\n{'='*60}")
     print(f"  Aggregated Summary ({num_runs} runs)")
     print(f"{'='*60}")
@@ -169,25 +167,35 @@ def print_summary_table(aggregated, num_runs):
     print()
 
 
+def generate_plots(per_run, aggregated, num_runs, output_dir):
+    run_indices = list(range(1, num_runs + 1))
+
+    # Throughput across runs
+    tp_rows = [(i, m.get("requests_sec", 0)) for i, m in zip(run_indices, per_run)]
+    tp_stdevs = None
+    if "requests_sec" in aggregated:
+        tp_stdevs = [aggregated["requests_sec"]["stdev"]] * num_runs
+    tp_path = os.path.join(output_dir, "throughput_across_runs.png")
+    plot_throughput(tp_rows, tp_path, "Run #", f"Throughput Across Runs (n={num_runs})")
+    print(f"  Wrote {tp_path}")
+
+    # Latency (p50/p90) across runs
+    lat_rows = [
+        (i, None, m.get("p50", 0) * 1000, m.get("p90", 0) * 1000)
+        for i, m in zip(run_indices, per_run)
+    ]
+    lat_path = os.path.join(output_dir, "latency_across_runs.png")
+    plot_latency(lat_rows, lat_path, "Run #", f"Latency Across Runs (n={num_runs})")
+    print(f"  Wrote {lat_path}")
+
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="Aggregate results from multiple experiment runs",
-    )
-    parser.add_argument(
-        "inputs", nargs="+",
-        help="Path to aggregated_results.json OR multiple run directories",
-    )
-    parser.add_argument(
-        "--client", default="node0",
-        help="Client node name to read logs from (default: node0)",
-    )
-    parser.add_argument(
-        "--output-dir", "-o", default=None,
-        help="Directory to write aggregated JSON (default: same directory as input)",
-    )
+    parser = argparse.ArgumentParser(description="Aggregate results from multiple experiment runs")
+    parser.add_argument("inputs", nargs="+", help="Path to aggregated_results.json OR multiple run directories")
+    parser.add_argument("--client", default="node0", help="Client node name (default: node0)")
+    parser.add_argument("--output-dir", "-o", default=None, help="Output directory (default: same as input)")
     args = parser.parse_args()
 
-    # Determine if input is a single JSON or multiple directories
     if len(args.inputs) == 1 and args.inputs[0].endswith(".json"):
         per_run, aggregated, num_runs = load_from_json(args.inputs[0])
         default_output = os.path.dirname(args.inputs[0]) or "."
@@ -200,14 +208,16 @@ def main():
 
     print_summary_table(aggregated, num_runs)
 
-    # Save aggregated JSON if loaded from directories
+    print("Generating plots...")
+    generate_plots(per_run, aggregated, num_runs, output_dir)
+
     if len(args.inputs) > 1 or not args.inputs[0].endswith(".json"):
         out_json = os.path.join(output_dir, "aggregated_results.json")
         with open(out_json, "w", encoding="utf-8") as f:
             json.dump({"num_runs": num_runs, "per_run": per_run, "aggregated": aggregated}, f, indent=2)
-        print(f"Wrote {out_json}")
+        print(f"  Wrote {out_json}")
 
-    print("Done!")
+    print("\nDone!")
 
 
 if __name__ == "__main__":
