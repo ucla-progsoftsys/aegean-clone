@@ -2,12 +2,14 @@ package exec
 
 import (
 	"aegean/common"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type parallelBatchRuntime struct {
-	requests []*scheduledRequest
-	finished int
-	nextReq  int
+	requests  []*scheduledRequest
+	finished  int
+	nextReq   int
+	activated bool
 }
 
 type parallelWorkerTask struct {
@@ -56,6 +58,7 @@ func (s *execScheduler) executeParallelBatches(e *Exec, parallelBatches [][]map[
 			if batch == nil {
 				break
 			}
+			s.activateBatch(e, batch, workerCount)
 			req := s.nextRunnableRequest(batch)
 			if req == nil {
 				break
@@ -73,6 +76,12 @@ func (s *execScheduler) executeParallelBatches(e *Exec, parallelBatches [][]map[
 			if status == "blocked_for_nested_response" {
 				res.req.state = requestWaiting
 			} else {
+				e.endRequestDispatchWait(res.req.payload)
+				e.startRequestSpan(
+					res.req.payload,
+					requestVerifyGateWaitSpanContextKey,
+					"exec.request_verify_gate_wait",
+				)
 				res.req.state = requestFinished
 				res.req.output = res.output
 				res.batch.finished++
@@ -111,6 +120,7 @@ func (s *execScheduler) executeSequentialBatches(e *Exec, parallelBatches [][]ma
 
 	outputs := make([]map[string]any, 0, len(allScheduled))
 	for _, batch := range batches {
+		s.activateBatch(e, batch, 1)
 		for _, req := range batch.requests {
 			/*
 			  This is based on the assumption that sequential execution is only triggered when
@@ -126,6 +136,12 @@ func (s *execScheduler) executeSequentialBatches(e *Exec, parallelBatches [][]ma
 			for {
 				output := e.ExecuteRequest(e, req.payload, ndSeed, ndTimestamp)
 				if common.GetString(output, "status") != "blocked_for_nested_response" {
+					e.endRequestDispatchWait(req.payload)
+					e.startRequestSpan(
+						req.payload,
+						requestVerifyGateWaitSpanContextKey,
+						"exec.request_verify_gate_wait",
+					)
 					req.state = requestFinished
 					req.output = output
 					outputs = append(outputs, output)
@@ -143,14 +159,15 @@ func (s *execScheduler) initParallelBatchRuntimes(parallelBatches [][]map[string
 	}
 	batches := make([]*parallelBatchRuntime, 0, len(parallelBatches))
 	allScheduled := make([]*scheduledRequest, 0)
-	for _, batchRequests := range parallelBatches {
+	for batchSeq, batchRequests := range parallelBatches {
 		scheduled := make([]*scheduledRequest, 0, len(batchRequests))
 		for reqIdx, req := range batchRequests {
 			scheduledReq := &scheduledRequest{
-				index:   reqIdx,
-				id:      requestIDForSchedule(req, reqIdx),
-				payload: req,
-				state:   requestRunnable,
+				index:    reqIdx,
+				batchSeq: batchSeq,
+				id:       requestIDForSchedule(req, reqIdx),
+				payload:  req,
+				state:    requestRunnable,
 			}
 			scheduled = append(scheduled, scheduledReq)
 			allScheduled = append(allScheduled, scheduledReq)
@@ -180,6 +197,7 @@ func (s *execScheduler) startParallelWorkers(
 	for i := 0; i < workerCount; i++ {
 		go func() {
 			for task := range taskCh {
+				e.endRequestDispatchWait(task.req.payload)
 				output := e.ExecuteRequest(e, task.req.payload, ndSeed, ndTimestamp)
 				resultCh <- parallelWorkerResult{batch: task.batch, req: task.req, output: output}
 			}
@@ -198,4 +216,42 @@ func (s *execScheduler) collectParallelOutputs(batches []*parallelBatchRuntime, 
 		}
 	}
 	return outputs
+}
+
+func (s *execScheduler) activateBatch(e *Exec, batch *parallelBatchRuntime, workerCount int) {
+	if batch == nil || batch.activated {
+		return
+	}
+	batch.activated = true
+	for _, req := range batch.requests {
+		outerSeq := 0
+		if seqAny, ok := e.GetRequestContextValue(req.payload["request_id"], requestBatchSeqContextKey); ok {
+			if seq, ok := seqAny.(int); ok {
+				outerSeq = seq
+			}
+		}
+		parallelBatchCount := 0
+		if countAny, ok := e.GetRequestContextValue(req.payload["request_id"], "parallel_batch_count"); ok {
+			if count, ok := countAny.(int); ok {
+				parallelBatchCount = count
+			}
+		}
+		batchRequestCount := 0
+		if countAny, ok := e.GetRequestContextValue(req.payload["request_id"], "batch_request_count"); ok {
+			if count, ok := countAny.(int); ok {
+				batchRequestCount = count
+			}
+		}
+		e.endRequestSpan(req.payload["request_id"], parallelBatchTurnWaitSpanContextKey)
+		e.startRequestDispatchWaitWithAttrs(
+			req.payload,
+			attribute.Int("batch.seq_num", outerSeq),
+			attribute.Int("batch.request_count", batchRequestCount),
+			attribute.Int("parallel_batch.index", req.batchSeq),
+			attribute.Int("parallel_batch.count", parallelBatchCount),
+			attribute.Int("parallel_batch.size", len(batch.requests)),
+			attribute.Int("parallel_batch.request_index", req.index),
+			attribute.Int("exec.worker_count", workerCount),
+		)
+	}
 }

@@ -2,7 +2,7 @@
 architecture: aegean.yaml
 
 # K6 configs
-k6_qps: 50
+k6_qps: 100
 duration: 15s
 k6_pre_allocated_vus: 0
 k6_max_vus: 10000
@@ -16,8 +16,6 @@ value_length: 100
 
 # Run & system configs
 run_timeout_seconds: 20
-batch_size: 40
-batch_timeout_ms: 20
 parallel_window_k: 4
 worker_count: 4
 gomaxprocs: 4

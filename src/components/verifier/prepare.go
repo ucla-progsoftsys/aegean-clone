@@ -1,8 +1,14 @@
 package verifier
 
-import "aegean/common"
+import (
+	"aegean/common"
+	"aegean/telemetry"
+)
 
 func (v *Verifier) applyPrepareMessage(payload map[string]any) map[string]any {
+	ctx, span := telemetry.StartSpanFromPayload(payload, "verifier.apply_prepare", telemetry.AttrsFromPayload(payload)...)
+	defer span.End()
+
 	seqNum := common.GetInt(payload, "seq_num")
 	token, _ := payload["token"].(string)
 	verifierID, _ := payload["verifier_id"].(string)
@@ -47,6 +53,7 @@ func (v *Verifier) applyPrepareMessage(payload map[string]any) map[string]any {
 		"token":       token,
 		"verifier_id": v.Name,
 	}
+	telemetry.InjectContext(ctx, commitMsg)
 	go v.sendToVerifiers(commitMsg)
 
 	if commitCount >= v.phaseQuorum && slot.committedToken == "" {

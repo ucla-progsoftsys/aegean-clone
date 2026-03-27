@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"aegean/common"
 )
 
 func TestLoadRunConfigResolvesArchitectureSiblingToRunsDir(t *testing.T) {
@@ -41,5 +43,80 @@ func TestLoadRunConfigResolvesArchitectureSiblingToRunsDir(t *testing.T) {
 	}
 	if got := cfg.Params["run_timeout_seconds"]; got != 30 {
 		t.Fatalf("run_timeout_seconds = %#v, want 30", got)
+	}
+}
+
+func TestLoadConfigIncludesServiceRunConfigOverrides(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, "architecture.yaml")
+	configBody := `
+services:
+  backend:
+    type: server
+    clients: [node0]
+    nodes: [node4]
+    exec_workflow: aegean_backend
+    init_state_workflow: aegean_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 1
+    phaseQuorumSize: 1
+    expectedExecVotes: 1
+    run_config_overrides:
+      batch_timeout_ms: 11
+      batch_size: 17
+nodes:
+  node4:
+    service: backend
+    is_primary_batcher: true
+`
+	if err := os.WriteFile(configPath, []byte(configBody), 0o644); err != nil {
+		t.Fatalf("write architecture config: %v", err)
+	}
+
+	cfgs, err := loadConfig(configPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	nodeCfg := cfgs["node4"]
+	if got := common.MustInt(nodeCfg.RunConfigOverrides, "batch_timeout_ms"); got != 11 {
+		t.Fatalf("batch_timeout_ms = %d, want 11", got)
+	}
+	if got := common.MustInt(nodeCfg.RunConfigOverrides, "batch_size"); got != 17 {
+		t.Fatalf("batch_size = %d, want 17", got)
+	}
+}
+
+func TestBuildNodeRunConfigAppliesServiceOverrides(t *testing.T) {
+	runParams := map[string]any{
+		"batch_size":       40,
+		"batch_timeout_ms": 20,
+		"service_overrides": map[string]any{
+			"backend": map[string]any{
+				"batch_timeout_ms": 10,
+				"batch_size":       20,
+			},
+		},
+	}
+	cfg := NodeConfig{
+		Service: "backend",
+		RunConfigOverrides: map[string]any{
+			"batch_timeout_ms": 15,
+		},
+	}
+
+	merged := buildNodeRunConfig(runParams, cfg, "node4")
+
+	if got := merged["batch_size"]; got != 20 {
+		t.Fatalf("batch_size = %#v, want 20", got)
+	}
+	if got := merged["batch_timeout_ms"]; got != 10 {
+		t.Fatalf("batch_timeout_ms = %#v, want 10", got)
+	}
+	if got := merged["service_name"]; got != "backend" {
+		t.Fatalf("service_name = %#v, want backend", got)
+	}
+	if _, exists := merged["service_overrides"]; exists {
+		t.Fatalf("service_overrides should not be copied into node run config")
 	}
 }

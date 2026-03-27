@@ -22,6 +22,9 @@ services:
     execVerifyQuorumSize: 2
     phaseQuorumSize: 2
     expectedExecVotes: 3
+    run_config_overrides:
+      batch_size: 40
+      batch_timeout_ms: 20
   external_service:
     type: external_service
     external_service_workflow: external_srv_external_service

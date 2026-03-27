@@ -1,15 +1,22 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"sort"
 
 	"aegean/nodes"
+	"aegean/telemetry"
 	workflow "aegean/workflow"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 func main() {
+	stopProfiles := startProfilingFromEnv()
+	installSignalCleanup(stopProfiles)
+	defer stopProfiles()
+
 	name := flag.String("name", "", "node name")
 	host := flag.String("host", "", "host to bind")
 	port := flag.Int("port", 0, "port to bind")
@@ -34,7 +41,15 @@ func main() {
 	if !ok {
 		panic(fmt.Sprintf("unknown node name: %s", *name))
 	}
+	nodeRunConfig := buildNodeRunConfig(runConfig.Params, cfg, *name)
 	readyNodes := allNodeNamesExcept(configs, *name)
+	telemetryShutdown := telemetry.Init(
+		context.Background(),
+		"aegean-"+cfg.Type,
+		attribute.String("node.name", *name),
+		attribute.String("node.type", cfg.Type),
+	)
+	defer telemetryShutdown(context.Background())
 
 	var node starter
 	switch cfg.Type {
@@ -47,7 +62,7 @@ func main() {
 		if clientFn == nil {
 			panic(fmt.Sprintf("unknown client workflow %q for node %s", clientWorkflow, *name))
 		}
-		node = nodes.NewClient(*name, *host, *port, cfg.Next, readyNodes, runConfig.Params, clientWorkflow, clientFn)
+		node = nodes.NewClient(*name, *host, *port, cfg.Next, readyNodes, nodeRunConfig, clientWorkflow, clientFn)
 	case "server":
 		execWorkflow := cfg.ExecWorkflow
 		if execWorkflow == "" {
@@ -65,7 +80,7 @@ func main() {
 		if initFn == nil {
 			panic(fmt.Sprintf("unknown init state workflow %q for node %s", initStateWorkflow, *name))
 		}
-		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Nodes, cfg.IsPrimaryBatcher, cfg.ShimQuorumSize, cfg.VerifyResponseQuorumSize, cfg.ExecVerifyQuorumSize, cfg.PhaseQuorumSize, cfg.ExpectedExecVotes, execFn, initFn, runConfig.Params)
+		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Nodes, cfg.IsPrimaryBatcher, cfg.ShimQuorumSize, cfg.VerifyResponseQuorumSize, cfg.ExecVerifyQuorumSize, cfg.PhaseQuorumSize, cfg.ExpectedExecVotes, execFn, initFn, nodeRunConfig)
 	case "external_service":
 		serviceInitWorkflow := cfg.ExternalServiceInitState
 		if serviceInitWorkflow == "" {
@@ -84,12 +99,43 @@ func main() {
 		if serviceFn == nil {
 			panic(fmt.Sprintf("unknown external service workflow %q for node %s", serviceWorkflow, *name))
 		}
-		node = nodes.NewExternalService(*name, *host, *port, runConfig.Params, initFn, serviceFn)
+		node = nodes.NewExternalService(*name, *host, *port, nodeRunConfig, initFn, serviceFn)
 	default:
 		panic(fmt.Sprintf("unrecognized node type: %s", cfg.Type))
 	}
 
 	node.Start()
+}
+
+func buildNodeRunConfig(runParams map[string]any, cfg NodeConfig, nodeName string) map[string]any {
+	nodeRunConfig := make(map[string]any, len(runParams)+len(cfg.RunConfigOverrides)+2)
+	for key, value := range runParams {
+		if key == "service_overrides" {
+			continue
+		}
+		nodeRunConfig[key] = value
+	}
+	for key, value := range cfg.RunConfigOverrides {
+		nodeRunConfig[key] = value
+	}
+	if rawOverrides, ok := runParams["service_overrides"]; ok {
+		serviceOverrides, err := asObject(rawOverrides)
+		if err != nil {
+			panic(fmt.Sprintf("parse service_overrides: %v", err))
+		}
+		if rawServiceOverrides, ok := serviceOverrides[cfg.Service]; ok {
+			serviceConfig, err := asObject(rawServiceOverrides)
+			if err != nil {
+				panic(fmt.Sprintf("parse service_overrides.%s: %v", cfg.Service, err))
+			}
+			for key, value := range serviceConfig {
+				nodeRunConfig[key] = value
+			}
+		}
+	}
+	nodeRunConfig["node_name"] = nodeName
+	nodeRunConfig["service_name"] = cfg.Service
+	return nodeRunConfig
 }
 
 type starter interface {

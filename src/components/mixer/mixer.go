@@ -1,6 +1,9 @@
 package mixer
 
-import "aegean/common"
+import (
+	"aegean/common"
+	"aegean/telemetry"
+)
 
 type Mixer struct {
 	Name   string
@@ -121,6 +124,8 @@ func (m *Mixer) partitionIntoParallelBatches(batch []map[string]any) [][]map[str
 }
 
 func (m *Mixer) HandleBatchMessage(payload map[string]any) map[string]any {
+	ctx, span := telemetry.StartSpanFromPayload(payload, "mixer.handle_batch", telemetry.AttrsFromPayload(payload)...)
+	defer span.End()
 
 	seqNum := common.GetInt(payload, "seq_num")
 	requests, ok := normalizeRequestSlice(payload["requests"])
@@ -137,6 +142,7 @@ func (m *Mixer) HandleBatchMessage(payload map[string]any) map[string]any {
 		"nd_seed":          payload["nd_seed"],
 		"nd_timestamp":     payload["nd_timestamp"],
 	}
+	telemetry.InjectContext(ctx, message)
 
 	if m.NextCh != nil {
 		m.NextCh <- message

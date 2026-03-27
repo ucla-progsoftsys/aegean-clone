@@ -16,11 +16,12 @@ const (
 )
 
 type scheduledRequest struct {
-	index   int
-	id      string
-	payload map[string]any
-	state   requestState
-	output  map[string]any
+	index    int
+	batchSeq int
+	id       string
+	payload  map[string]any
+	state    requestState
+	output   map[string]any
 }
 
 type workerResult struct {

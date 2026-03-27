@@ -90,6 +90,9 @@ func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
 
 	// Case 1: rollback (view increased or forced sequential by verifier).
 	if shouldRollback {
+		if pending.verifySpan != nil {
+			pending.verifySpan.End()
+		}
 		log.Printf(
 			"%s: verifier decision=rollback seq_num=%d view_num=%d local_view=%d stable_seq_num=%d verifier_id=%s force_sequential=%t token=%s had_pending=%t pending_token=%s",
 			e.Name,
@@ -166,6 +169,9 @@ func (e *Exec) handleVerifyResponse(payload map[string]any) map[string]any {
 
 	// Case 2: state transfer (same view quorum but token mismatch).
 	if pending.token != agreedToken {
+		if pending.verifySpan != nil {
+			pending.verifySpan.End()
+		}
 		log.Printf(
 			"%s: verifier decision=state_transfer seq_num=%d view_num=%d stable_seq_num=%d verifier_id=%s reason=token_mismatch local_token=%s agreed_token=%s",
 			e.Name,

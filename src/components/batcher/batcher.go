@@ -1,11 +1,15 @@
 package batcher
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
 	"aegean/common"
 	netx "aegean/net"
+	"aegean/telemetry"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Batcher groups client requests into ordered batches as described in Eve's execution stage
@@ -23,6 +27,7 @@ type Batcher struct {
 	seqNum         int
 	mu             sync.Mutex
 	batchStartTime time.Time
+	requestSpans   map[string]trace.Span
 }
 
 func NewBatcher(name string, nextCh chan<- map[string]any, execs []string, isPrimary bool, runConfig map[string]any) *Batcher {
@@ -37,6 +42,7 @@ func NewBatcher(name string, nextCh chan<- map[string]any, execs []string, isPri
 		batch:        []map[string]any{},
 		batchSize:    common.MustInt(runConfig, "batch_size"),
 		batchTimeout: time.Duration(common.MustInt(runConfig, "batch_timeout_ms")) * time.Millisecond,
+		requestSpans: make(map[string]trace.Span),
 	}
 	return b
 }
@@ -71,6 +77,9 @@ func (b *Batcher) flushBatchLocked() {
 	b.batch = []map[string]any{}
 	b.seqNum++
 	b.batchStartTime = time.Time{}
+	for _, request := range batch {
+		b.endRequestBatchWaitLocked(request)
+	}
 
 	// Attach nondeterminism data for consistent execution across replicas
 	message := map[string]any{
@@ -79,6 +88,9 @@ func (b *Batcher) flushBatchLocked() {
 		"requests":     batch,
 		"nd_seed":      time.Now().UnixMilli(),
 		"nd_timestamp": float64(time.Now().UnixNano()) / 1e9,
+	}
+	if len(batch) > 0 {
+		telemetry.CopyContext(message, batch[0])
 	}
 
 	for _, execNode := range b.Execs {
@@ -103,6 +115,7 @@ func (b *Batcher) HandleRequestMessage(payload map[string]any) map[string]any {
 	if len(b.batch) == 0 {
 		b.batchStartTime = time.Now()
 	}
+	b.startRequestBatchWaitLocked(payload)
 	b.batch = append(b.batch, payload)
 	if len(b.batch) >= b.batchSize {
 		b.flushBatchLocked()
@@ -112,3 +125,44 @@ func (b *Batcher) HandleRequestMessage(payload map[string]any) map[string]any {
 }
 
 // TODO: allow primaries to rotate, on batcher failures
+
+func (b *Batcher) startRequestBatchWaitLocked(payload map[string]any) {
+	requestID, ok := canonicalRequestID(payload["request_id"])
+	if !ok {
+		return
+	}
+	if _, exists := b.requestSpans[requestID]; exists {
+		return
+	}
+	_, span := telemetry.StartSpanFromPayload(
+		payload,
+		"batcher.request_queue_wait",
+		append(
+			telemetry.AttrsFromPayload(payload),
+			attribute.String("node.name", b.Name),
+		)...,
+	)
+	b.requestSpans[requestID] = span
+}
+
+func (b *Batcher) endRequestBatchWaitLocked(payload map[string]any) {
+	requestID, ok := canonicalRequestID(payload["request_id"])
+	if !ok {
+		return
+	}
+	span, exists := b.requestSpans[requestID]
+	if !exists {
+		return
+	}
+	delete(b.requestSpans, requestID)
+	if span != nil {
+		span.End()
+	}
+}
+
+func canonicalRequestID(id any) (string, bool) {
+	if id == nil {
+		return "", false
+	}
+	return fmt.Sprintf("%v", id), true
+}

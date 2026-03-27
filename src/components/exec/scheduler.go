@@ -97,6 +97,11 @@ func (s *execScheduler) unregisterScheduledRequests(e *Exec, requests []*schedul
 	defer s.mu.Unlock()
 	for _, req := range requests {
 		delete(s.inflightRequests, req.id)
-		s.contextStore.clearByID(req.id)
+		s.contextStore.clearByIDExcept(
+			req.id,
+			postNestedVerifyGateWaitSpanContextKey,
+			requestVerifyGateWaitSpanContextKey,
+			requestVerifyWaitSpanContextKey,
+		)
 	}
 }

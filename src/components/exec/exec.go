@@ -2,23 +2,37 @@ package exec
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"aegean/common"
+	"aegean/telemetry"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // logExecStateDetails gates verbose state-dump logs in exec verification paths
 // Keep false in normal runs to avoid very large logs
 const logExecStateDetails = false
 
+const nestedResumeSpanContextKey = "nested_resume_span"
+const batchBufferWaitSpanContextKey = "batch_buffer_wait_span"
+const parallelBatchTurnWaitSpanContextKey = "parallel_batch_turn_wait_span"
+const requestDispatchWaitSpanContextKey = "request_dispatch_wait_span"
+const requestVerifyGateWaitSpanContextKey = "request_verify_gate_wait_span"
+const requestVerifyWaitSpanContextKey = "request_verify_wait_span"
+const postNestedVerifyGateWaitSpanContextKey = "post_nested_verify_gate_wait_span"
+const requestBatchSeqContextKey = "request_batch_seq"
+
 type pendingExecResult struct {
 	outputs    []map[string]any
 	state      map[string]string
 	merkleRoot string
 	token      string
+	verifySpan trace.Span
 	// verifySent indicates whether a verify message has been sent for this seq
 	verifySent bool
 }
@@ -33,11 +47,41 @@ type ingressEventKind int
 const (
 	ingressBatchEvent ingressEventKind = iota
 	ingressVerifyResponseEvent
+	ingressBatchExecutionCompleteEvent
 )
 
 type ingressEvent struct {
-	kind    ingressEventKind
+	kind        ingressEventKind
+	payload     map[string]any
+	batchResult *batchExecutionResult
+}
+
+type batchExecutionTask struct {
 	payload map[string]any
+}
+
+type batchExecutionResult struct {
+	seqNum           int
+	payload          map[string]any
+	outputs          []map[string]any
+	state            map[string]string
+	merkleRoot       string
+	batchServiceSpan trace.Span
+}
+
+type coordinatorStats struct {
+	windowStart               time.Time
+	ingressEvents             int
+	batchEvents               int
+	verifyResponseEvents      int
+	batchExecutionCompletions int
+	drainCalls                int
+	drainProgressCalls        int
+	flushBatchHits            int
+	flushVerifyHits           int
+	flushVerifyRespHits       int
+	drainWall                 time.Duration
+	maxDrainWall              time.Duration
 }
 
 // ExecuteRequestFunc handles a single request for an exec node.
@@ -88,13 +132,16 @@ type Exec struct {
 	verifyResponseTimeout time.Duration
 	verifyResponseTimers  map[int]*time.Timer
 	// Out-of-order buffers
-	batchBuffer   *common.OOOBuffer[map[string]any]
-	verifyBuffer  *common.MultiOOOBuffer[map[string]any]
-	nextBatchSeq  int
-	nextVerifySeq int
-	workerCount   int
-	scheduler     *execScheduler
-	batchCtx      *batchMerkleContext
+	batchBuffer    *common.OOOBuffer[map[string]any]
+	verifyBuffer   *common.MultiOOOBuffer[map[string]any]
+	nextBatchSeq   int
+	nextVerifySeq  int
+	batchExecuting bool
+	workerCount    int
+	scheduler      *execScheduler
+	batchCtx       *batchMerkleContext
+	batchExecCh    chan batchExecutionTask
+	coordStats     coordinatorStats
 	// Request execution hook
 	ExecuteRequest ExecuteRequestFunc
 }
@@ -154,11 +201,14 @@ func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- 
 		nextBatchSeq:          1,
 		nextVerifySeq:         1,
 		ingressCh:             make(chan ingressEvent, 8192),
+		batchExecCh:           make(chan batchExecutionTask, 1),
 		workerCount:           common.MustInt(initialRunConfig, "worker_count"),
+		coordStats:            coordinatorStats{windowStart: time.Now()},
 	}
 	exec.verifyResponseQuorum = common.NewQuorumHelper(verifyResponseQuorumSize)
 	exec.storeCheckpoint(0, stable.PrevHash, stable.KVStore, stable.MerkleRoot)
 	exec.scheduler = newExecScheduler(initialRunConfig)
+	go exec.runBatchExecutor()
 	go exec.runCoordinator()
 	return exec
 }
@@ -243,6 +293,17 @@ func (e *Exec) BufferNestedResponse(payload map[string]any) bool {
 	if !ok {
 		return false
 	}
+	if _, exists := e.GetRequestContextValue(requestID, nestedResumeSpanContextKey); !exists {
+		_, span := telemetry.StartSpanFromPayload(
+			payload,
+			"exec.nested_resume_wait",
+			append(
+				telemetry.AttrsFromPayload(payload),
+				attribute.String("node.name", e.Name),
+			)...,
+		)
+		_ = e.SetRequestContextValue(requestID, nestedResumeSpanContextKey, span)
+	}
 	return e.scheduler.enqueueNestedResponse(requestID, payload)
 }
 
@@ -271,19 +332,168 @@ func (e *Exec) HandleStateTransferRequestMessage(payload map[string]any) map[str
 	return e.handleStateTransferRequest(payload)
 }
 
+func (e *Exec) runBatchExecutor() {
+	for task := range e.batchExecCh {
+		result := e.executeBatch(task.payload)
+		e.ingressCh <- ingressEvent{kind: ingressBatchExecutionCompleteEvent, batchResult: result}
+	}
+}
+
+func (e *Exec) startRequestDispatchWait(request map[string]any) {
+	requestID, ok := canonicalRequestID(request["request_id"])
+	if !ok {
+		return
+	}
+	if _, exists := e.GetRequestContextValue(requestID, requestDispatchWaitSpanContextKey); exists {
+		return
+	}
+	_, span := telemetry.StartSpanFromPayload(
+		request,
+		"exec.request_dispatch_wait",
+		append(
+			telemetry.AttrsFromPayload(request),
+			attribute.String("node.name", e.Name),
+		)...,
+	)
+	_ = e.SetRequestContextValue(requestID, requestDispatchWaitSpanContextKey, span)
+}
+
+func (e *Exec) endRequestDispatchWait(request map[string]any) {
+	requestID, ok := canonicalRequestID(request["request_id"])
+	if !ok {
+		return
+	}
+	spanAny, exists := e.GetRequestContextValue(requestID, requestDispatchWaitSpanContextKey)
+	if !exists {
+		return
+	}
+	if span, ok := spanAny.(trace.Span); ok && span != nil {
+		span.End()
+	}
+	e.DeleteRequestContextValue(requestID, requestDispatchWaitSpanContextKey)
+}
+
+func (e *Exec) startRequestDispatchWaitWithAttrs(request map[string]any, attrs ...attribute.KeyValue) {
+	requestID, ok := canonicalRequestID(request["request_id"])
+	if !ok {
+		return
+	}
+	if _, exists := e.GetRequestContextValue(requestID, requestDispatchWaitSpanContextKey); exists {
+		return
+	}
+	_, span := telemetry.StartSpanFromPayload(
+		request,
+		"exec.request_dispatch_wait",
+		append(
+			append(
+				telemetry.AttrsFromPayload(request),
+				attribute.String("node.name", e.Name),
+			),
+			attrs...,
+		)...,
+	)
+	_ = e.SetRequestContextValue(requestID, requestDispatchWaitSpanContextKey, span)
+}
+
+func (e *Exec) startRequestSpan(request map[string]any, contextKey string, spanName string, attrs ...attribute.KeyValue) {
+	requestID, ok := canonicalRequestID(request["request_id"])
+	if !ok {
+		return
+	}
+	if _, exists := e.GetRequestContextValue(requestID, contextKey); exists {
+		return
+	}
+	_, span := telemetry.StartSpanFromPayload(
+		request,
+		spanName,
+		append(
+			append(
+				telemetry.AttrsFromPayload(request),
+				attribute.String("node.name", e.Name),
+			),
+			attrs...,
+		)...,
+	)
+	_ = e.SetRequestContextValue(requestID, contextKey, span)
+}
+
+func (e *Exec) endRequestSpan(requestID any, contextKey string) {
+	canonicalID, ok := canonicalRequestID(requestID)
+	if !ok {
+		return
+	}
+	spanAny, exists := e.GetRequestContextValue(canonicalID, contextKey)
+	if !exists {
+		return
+	}
+	if span, ok := spanAny.(trace.Span); ok && span != nil {
+		span.End()
+	}
+	e.DeleteRequestContextValue(canonicalID, contextKey)
+}
+
+func (e *Exec) requestPayloadsForSeq(seqNum int) []map[string]any {
+	e.mu.Lock()
+	batchPayload, ok := e.replayableBatchInputs[seqNum]
+	e.mu.Unlock()
+	if !ok {
+		return nil
+	}
+	parallelBatches, ok := batchPayload["parallel_batches"].([][]map[string]any)
+	if !ok {
+		return nil
+	}
+	requests := make([]map[string]any, 0)
+	for _, batch := range parallelBatches {
+		requests = append(requests, batch...)
+	}
+	return requests
+}
+
+func (e *Exec) requestPayloadForSeq(seqNum int, requestID any) map[string]any {
+	canonicalID, ok := canonicalRequestID(requestID)
+	if !ok {
+		return nil
+	}
+	for _, request := range e.requestPayloadsForSeq(seqNum) {
+		reqID, ok := canonicalRequestID(request["request_id"])
+		if ok && reqID == canonicalID {
+			return request
+		}
+	}
+	return nil
+}
+
+func PostNestedVerifyGateWaitSpanKey() string {
+	return postNestedVerifyGateWaitSpanContextKey
+}
+
+func (e *Exec) StartRequestWaitSpan(request map[string]any, contextKey string, spanName string, attrs ...attribute.KeyValue) {
+	e.startRequestSpan(request, contextKey, spanName, attrs...)
+}
+
+func (e *Exec) RequestVerifyGateSnapshot() (int, int) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.nextVerifySeq, e.stableState.SeqNum
+}
+
 func (e *Exec) runCoordinator() {
 	for {
 		ev := <-e.ingressCh
 		e.applyIngressEvent(ev)
+		e.maybeLogCoordinatorStats()
 
 		for {
 			select {
 			case ev = <-e.ingressCh:
 				e.applyIngressEvent(ev)
+				e.maybeLogCoordinatorStats()
 			default:
 				if !e.drainBufferedMessages() {
 					goto next
 				}
+				e.maybeLogCoordinatorStats()
 			}
 		}
 	next:
@@ -291,14 +501,63 @@ func (e *Exec) runCoordinator() {
 }
 
 func (e *Exec) applyIngressEvent(ev ingressEvent) {
+	e.coordStats.ingressEvents++
 	switch ev.kind {
 	case ingressBatchEvent:
+		e.coordStats.batchEvents++
 		seqNum := common.GetInt(ev.payload, "seq_num")
+		e.mu.Lock()
+		nextBatchSeq := e.nextBatchSeq
+		stableSeq := e.stableState.SeqNum
+		batchExecuting := e.batchExecuting
+		e.mu.Unlock()
+		if parallelBatches, ok := ev.payload["parallel_batches"].([][]map[string]any); ok {
+			requestCount := batchRequestCount(parallelBatches)
+			queueDepth := seqNum - nextBatchSeq
+			if queueDepth < 0 {
+				queueDepth = 0
+			}
+			_, batchQueueSpan := telemetry.StartSpanFromPayload(
+				ev.payload,
+				"exec.batch_queue_wait",
+				append(
+					telemetry.AttrsFromPayload(ev.payload),
+					attribute.String("node.name", e.Name),
+					attribute.Int("batch.seq_num", seqNum),
+					attribute.Int("batch.request_count", requestCount),
+					attribute.Int("parallel_batch.count", len(parallelBatches)),
+					attribute.Int("batch.queue_depth_on_arrival", queueDepth),
+					attribute.Int("batch.next_batch_seq_on_arrival", nextBatchSeq),
+					attribute.Int("batch.stable_seq_on_arrival", stableSeq),
+					attribute.Bool("batch.executing_on_arrival", batchExecuting),
+				)...,
+			)
+			ev.payload["_batch_queue_wait_span"] = batchQueueSpan
+			for parallelBatchIdx, batch := range parallelBatches {
+				for requestIdx, request := range batch {
+					e.startRequestSpan(
+						request,
+						batchBufferWaitSpanContextKey,
+						"exec.batch_buffer_wait",
+						attribute.Int("batch.seq_num", seqNum),
+						attribute.Int("batch.request_count", requestCount),
+						attribute.Int("parallel_batch.index", parallelBatchIdx),
+						attribute.Int("parallel_batch.size", len(batch)),
+						attribute.Int("parallel_batch.request_index", requestIdx),
+						attribute.Int("parallel_batch.count", len(parallelBatches)),
+					)
+				}
+			}
+		}
 		e.batchBuffer.Add(seqNum, ev.payload)
 	case ingressVerifyResponseEvent:
+		e.coordStats.verifyResponseEvents++
 		seqNum := common.GetInt(ev.payload, "seq_num")
 		view := common.GetInt(ev.payload, "view")
 		e.verifyBuffer.Add(view, seqNum, ev.payload)
+	case ingressBatchExecutionCompleteEvent:
+		e.coordStats.batchExecutionCompletions++
+		e.applyBatchExecutionResult(ev.batchResult)
 	default:
 		return
 	}
@@ -307,8 +566,65 @@ func (e *Exec) applyIngressEvent(ev ingressEvent) {
 // Only the coordinator goroutine invokes this method; that single-owner model
 // provides sequencing safety for nextBatchSeq/nextVerifySeq advancement.
 func (e *Exec) drainBufferedMessages() bool {
+	start := time.Now()
 	bResp := e.flushNextBatch()
 	vResp := e.flushNextVerify()
 	vrResp := e.flushNextVerifyResponse()
+	elapsed := time.Since(start)
+	e.coordStats.drainCalls++
+	e.coordStats.drainWall += elapsed
+	if elapsed > e.coordStats.maxDrainWall {
+		e.coordStats.maxDrainWall = elapsed
+	}
+	if bResp || vResp || vrResp {
+		e.coordStats.drainProgressCalls++
+	}
+	if bResp {
+		e.coordStats.flushBatchHits++
+	}
+	if vResp {
+		e.coordStats.flushVerifyHits++
+	}
+	if vrResp {
+		e.coordStats.flushVerifyRespHits++
+	}
 	return bResp || vResp || vrResp
+}
+
+func (e *Exec) maybeLogCoordinatorStats() {
+	now := time.Now()
+	if now.Sub(e.coordStats.windowStart) < time.Second {
+		return
+	}
+	avgDrainUs := 0.0
+	if e.coordStats.drainCalls > 0 {
+		avgDrainUs = float64(e.coordStats.drainWall.Microseconds()) / float64(e.coordStats.drainCalls)
+	}
+	e.mu.Lock()
+	nextBatchSeq := e.nextBatchSeq
+	nextVerifySeq := e.nextVerifySeq
+	stableSeq := e.stableState.SeqNum
+	batchExecuting := e.batchExecuting
+	e.mu.Unlock()
+	log.Printf(
+		"%s: coordinator_stats window=%s ingress=%d batch_events=%d verify_resp_events=%d batch_exec_done=%d drain_calls=%d drain_progress=%d flush_batch=%d flush_verify=%d flush_verify_resp=%d avg_drain_us=%.1f max_drain_us=%d next_batch_seq=%d next_verify_seq=%d stable_seq=%d batch_executing=%t",
+		e.Name,
+		now.Sub(e.coordStats.windowStart).Truncate(time.Millisecond),
+		e.coordStats.ingressEvents,
+		e.coordStats.batchEvents,
+		e.coordStats.verifyResponseEvents,
+		e.coordStats.batchExecutionCompletions,
+		e.coordStats.drainCalls,
+		e.coordStats.drainProgressCalls,
+		e.coordStats.flushBatchHits,
+		e.coordStats.flushVerifyHits,
+		e.coordStats.flushVerifyRespHits,
+		avgDrainUs,
+		e.coordStats.maxDrainWall.Microseconds(),
+		nextBatchSeq,
+		nextVerifySeq,
+		stableSeq,
+		batchExecuting,
+	)
+	e.coordStats = coordinatorStats{windowStart: now}
 }

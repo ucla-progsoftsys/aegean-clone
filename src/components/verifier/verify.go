@@ -1,6 +1,9 @@
 package verifier
 
-import "aegean/common"
+import (
+	"aegean/common"
+	"aegean/telemetry"
+)
 
 func (v *Verifier) flushNextVerify() bool {
 	view, seqNum, ok := v.verifyBuffer.PeekNext()
@@ -35,6 +38,9 @@ func (v *Verifier) flushNextVerify() bool {
 }
 
 func (v *Verifier) applyVerifyMessage(payload map[string]any) map[string]any {
+	ctx, span := telemetry.StartSpanFromPayload(payload, "verifier.apply_verify", telemetry.AttrsFromPayload(payload)...)
+	defer span.End()
+
 	seqNum := common.GetInt(payload, "seq_num")
 	token, _ := payload["token"].(string)
 	prevHash, _ := payload["prev_hash"].(string)
@@ -101,6 +107,7 @@ func (v *Verifier) applyVerifyMessage(payload map[string]any) map[string]any {
 		"token":       token,
 		"verifier_id": v.Name,
 	}
+	telemetry.InjectContext(ctx, prepareMsg)
 	go v.sendToVerifiers(prepareMsg)
 
 	// Fast-path local transition when quorum size is 1.
@@ -114,6 +121,7 @@ func (v *Verifier) applyVerifyMessage(payload map[string]any) map[string]any {
 			"token":       token,
 			"verifier_id": v.Name,
 		}
+		telemetry.InjectContext(ctx, commitMsg)
 		go v.sendToVerifiers(commitMsg)
 		if commitCount >= v.phaseQuorum && slot.committedToken == "" {
 			slot.committedToken = token

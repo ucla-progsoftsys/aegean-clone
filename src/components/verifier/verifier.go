@@ -6,6 +6,7 @@ import (
 
 	"aegean/common"
 	netx "aegean/net"
+	"aegean/telemetry"
 )
 
 type Verifier struct {
@@ -121,6 +122,10 @@ func (v *Verifier) sendVerifyResponse(seqNum int, view int, token string, forceS
 		"force_sequential": forceSequential,
 		"verifier_id":      v.Name,
 	}
+	telemetry.CopyContext(response, map[string]any{
+		"seq_num": seqNum,
+		"type":    "verify_response",
+	})
 
 	for _, execNode := range v.Execs {
 		if execNode == v.Name && v.ExecCh != nil {

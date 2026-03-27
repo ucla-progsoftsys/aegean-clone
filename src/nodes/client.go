@@ -3,11 +3,14 @@ package nodes
 import (
 	"aegean/common"
 	netx "aegean/net"
+	"aegean/telemetry"
 	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type Client struct {
@@ -55,6 +58,13 @@ func (c *Client) Start() {
 }
 
 func (c *Client) HandleMessage(payload map[string]any) map[string]any {
+	_, span := telemetry.StartSpanFromPayload(
+		payload,
+		"client.handle_message",
+		append(telemetry.AttrsFromPayload(payload), attribute.String("node.name", c.Name))...,
+	)
+	defer span.End()
+
 	msgType, _ := payload["type"].(string)
 	if msgType == "response" {
 		return c.handleResponse(payload)
@@ -63,6 +73,13 @@ func (c *Client) HandleMessage(payload map[string]any) map[string]any {
 }
 
 func (c *Client) handleRequest(payload map[string]any) map[string]any {
+	ctx, span := telemetry.StartSpanFromPayload(
+		payload,
+		"client.dispatch_request",
+		append(telemetry.AttrsFromPayload(payload), attribute.String("node.name", c.Name))...,
+	)
+	defer span.End()
+
 	requestID := atomic.AddUint64(&c.requestSeq, 1)
 	requestKey := toKey(requestID)
 
@@ -78,6 +95,7 @@ func (c *Client) handleRequest(payload map[string]any) map[string]any {
 	outgoing["type"] = "request"
 	outgoing["request_id"] = requestID
 	outgoing["sender"] = c.Name
+	telemetry.InjectContext(ctx, outgoing)
 
 	type sendResult struct {
 		node     string

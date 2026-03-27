@@ -4,7 +4,15 @@ import (
 	"log"
 
 	netx "aegean/net"
+	"aegean/telemetry"
+	"go.opentelemetry.io/otel/attribute"
 )
+
+const responseEmitWaitSpanKey = "__response_emit_wait_span"
+
+func ResponseEmitWaitSpanKey() string {
+	return responseEmitWaitSpanKey
+}
 
 func (e *Exec) flushNextVerify() bool {
 	e.mu.Lock()
@@ -16,6 +24,30 @@ func (e *Exec) flushNextVerify() bool {
 	e.mu.Unlock()
 	// Compute token with committed prevHash to avoid divergence for the next sequence.
 	if ok && seq == stableSeqNum+1 && !pending.verifySent {
+		for _, request := range e.requestPayloadsForSeq(seq) {
+			e.endRequestSpan(request["request_id"], postNestedVerifyGateWaitSpanContextKey)
+			e.endRequestSpan(request["request_id"], requestVerifyGateWaitSpanContextKey)
+			e.startRequestSpan(
+				request,
+				requestVerifyWaitSpanContextKey,
+				"exec.request_verify_wait",
+				attribute.Int("batch.seq_num", seq),
+				attribute.Int("gate.next_verify_seq", seq),
+				attribute.Int("gate.stable_seq_num", stableSeqNum),
+			)
+		}
+		if batchPayload, ok := e.replayableBatchInputs[seq]; ok {
+			_, verifySpan := telemetry.StartSpanFromPayload(
+				batchPayload,
+				"exec.verify_wait",
+				append(
+					telemetry.AttrsFromPayload(batchPayload),
+					attribute.String("node.name", e.Name),
+					attribute.Int("batch.seq_num", seq),
+				)...,
+			)
+			pending.verifySpan = verifySpan
+		}
 		token := e.computeStateHash(pending.merkleRoot, pending.outputs, prevHash, seq)
 		pending.token = token
 		pending.verifySent = true
@@ -36,6 +68,9 @@ func (e *Exec) flushNextVerify() bool {
 			"token":     token,
 			"prev_hash": prevHash,
 			"exec_id":   e.Name,
+		}
+		if batchPayload, ok := e.replayableBatchInputs[seq]; ok {
+			telemetry.CopyContext(verifyMsg, batchPayload)
 		}
 		log.Printf(
 			"%s: assembled verify hash seq_num=%d view_num=%d stable_seq_num=%d prev_hash=%s state_root=%s final_hash=%s output_count=%d outputs=%v verifiers=%v",
@@ -73,6 +108,9 @@ func (e *Exec) flushNextVerify() bool {
 }
 
 func (e *Exec) finalizeCommit(seqNum int, pending pendingExecResult, agreedToken string) {
+	if pending.verifySpan != nil {
+		pending.verifySpan.End()
+	}
 	e.mu.Lock()
 	delete(e.pendingExecResults, seqNum)
 	e.stableState = State{
@@ -94,11 +132,24 @@ func (e *Exec) finalizeCommit(seqNum int, pending pendingExecResult, agreedToken
 
 	for _, output := range pending.outputs {
 		requestID := output["request_id"]
+		e.endRequestSpan(requestID, requestVerifyWaitSpanContextKey)
 		responseMsg := map[string]any{
 			"type":       "response",
 			"request_id": requestID,
 			"response":   output,
 		}
+		if requestPayload := e.requestPayloadForSeq(seqNum, requestID); requestPayload != nil {
+			telemetry.CopyContext(responseMsg, requestPayload)
+		}
+		_, emitSpan := telemetry.StartSpanFromPayload(
+			responseMsg,
+			"exec.response_emit_wait",
+			append(
+				telemetry.AttrsFromPayload(responseMsg),
+				attribute.String("node.name", e.Name),
+			)...,
+		)
+		responseMsg[responseEmitWaitSpanKey] = emitSpan
 		if e.ShimCh != nil {
 			e.ShimCh <- responseMsg
 		}

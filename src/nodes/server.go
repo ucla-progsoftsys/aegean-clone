@@ -7,9 +7,13 @@ import (
 	"aegean/components/mixer"
 	"aegean/components/shim"
 	"aegean/components/verifier"
+	"aegean/telemetry"
 	"math/rand/v2"
 	"runtime"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -90,10 +94,10 @@ func (s *Server) Start() {
 			if injectChannelDelay {
 				time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
 			}
-			doWithLabels(func() struct{} {
+			doWithPayloadSpan(msg, "server.shim_to_batcher", func() struct{} {
 				s.Batcher.HandleRequestMessage(msg)
 				return struct{}{}
-			}, "node", s.Name, "component", "batcher", "path", "shim_to_batcher")
+			}, attribute.String("node.name", s.Name), attribute.String("component", "batcher"), attribute.String("path", "shim_to_batcher"))
 		}
 	}()
 
@@ -102,10 +106,10 @@ func (s *Server) Start() {
 			time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
 		}
 		for msg := range s.batcherToMixer {
-			doWithLabels(func() struct{} {
+			doWithPayloadSpan(msg, "server.batcher_to_mixer", func() struct{} {
 				s.Mixer.HandleBatchMessage(msg)
 				return struct{}{}
-			}, "node", s.Name, "component", "mixer", "path", "batcher_to_mixer")
+			}, attribute.String("node.name", s.Name), attribute.String("component", "mixer"), attribute.String("path", "batcher_to_mixer"))
 		}
 	}()
 
@@ -114,10 +118,10 @@ func (s *Server) Start() {
 			time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
 		}
 		for msg := range s.mixerToExec {
-			doWithLabels(func() struct{} {
+			doWithPayloadSpan(msg, "server.mixer_to_exec", func() struct{} {
 				s.Exec.HandleBatchMessage(msg)
 				return struct{}{}
-			}, "node", s.Name, "component", "exec", "path", "mixer_to_exec")
+			}, attribute.String("node.name", s.Name), attribute.String("component", "exec"), attribute.String("path", "mixer_to_exec"))
 		}
 	}()
 
@@ -126,10 +130,10 @@ func (s *Server) Start() {
 			time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
 		}
 		for msg := range s.shimToExec {
-			doWithLabels(func() struct{} {
+			doWithPayloadSpan(msg, "server.shim_to_exec", func() struct{} {
 				_ = s.Exec.BufferNestedResponse(msg)
 				return struct{}{}
-			}, "node", s.Name, "component", "exec", "path", "shim_to_exec")
+			}, attribute.String("node.name", s.Name), attribute.String("component", "exec"), attribute.String("path", "shim_to_exec"))
 		}
 	}()
 
@@ -138,10 +142,10 @@ func (s *Server) Start() {
 			time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
 		}
 		for msg := range s.execToVerifier {
-			doWithLabels(func() struct{} {
+			doWithPayloadSpan(msg, "server.exec_to_verifier", func() struct{} {
 				s.Verifier.HandleVerifyMessage(msg)
 				return struct{}{}
-			}, "node", s.Name, "component", "verifier", "path", "exec_to_verifier")
+			}, attribute.String("node.name", s.Name), attribute.String("component", "verifier"), attribute.String("path", "exec_to_verifier"))
 		}
 	}()
 
@@ -150,10 +154,10 @@ func (s *Server) Start() {
 			time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
 		}
 		for msg := range s.verifierToExec {
-			doWithLabels(func() struct{} {
+			doWithPayloadSpan(msg, "server.verifier_to_exec", func() struct{} {
 				s.Exec.HandleVerifyResponseMessage(msg)
 				return struct{}{}
-			}, "node", s.Name, "component", "exec", "path", "verifier_to_exec")
+			}, attribute.String("node.name", s.Name), attribute.String("component", "exec"), attribute.String("path", "verifier_to_exec"))
 		}
 	}()
 
@@ -162,10 +166,16 @@ func (s *Server) Start() {
 			time.Sleep(time.Duration(rand.Float64() * 0.01 * float64(time.Second)))
 		}
 		for msg := range s.execToShim {
-			doWithLabels(func() struct{} {
+			if waitSpanAny, ok := msg[exec.ResponseEmitWaitSpanKey()]; ok {
+				if waitSpan, ok := waitSpanAny.(trace.Span); ok && waitSpan != nil {
+					waitSpan.End()
+				}
+				delete(msg, exec.ResponseEmitWaitSpanKey())
+			}
+			doWithPayloadSpan(msg, "server.exec_to_shim", func() struct{} {
 				s.Shim.HandleOutgoingResponse(msg)
 				return struct{}{}
-			}, "node", s.Name, "component", "shim", "path", "exec_to_shim")
+			}, attribute.String("node.name", s.Name), attribute.String("component", "shim"), attribute.String("path", "exec_to_shim"))
 		}
 	}()
 
@@ -176,9 +186,9 @@ func (s *Server) HandleMessage(payload map[string]any) map[string]any {
 	// Route by message type to the correct component
 	msgType, _ := payload["type"].(string)
 	if msgType == "" || msgType == "request" {
-		return doWithLabels(func() map[string]any {
+		return doWithPayloadSpan(payload, "server.handle_request", func() map[string]any {
 			return s.Shim.HandleRequestMessage(payload)
-		}, "node", s.Name, "component", "shim", "msg_type", "request")
+		}, attribute.String("node.name", s.Name), attribute.String("component", "shim"), attribute.String("msg_type", "request"))
 	}
 
 	if injectNetworkDelay {
@@ -186,41 +196,41 @@ func (s *Server) HandleMessage(payload map[string]any) map[string]any {
 	}
 	switch msgType {
 	case "response":
-		return doWithLabels(func() map[string]any {
+		return doWithPayloadSpan(payload, "server.handle_response", func() map[string]any {
 			return s.Shim.HandleIncomingResponse(payload)
-		}, "node", s.Name, "component", "shim", "msg_type", "response")
+		}, attribute.String("node.name", s.Name), attribute.String("component", "shim"), attribute.String("msg_type", "response"))
 	case "batch":
-		return doWithLabels(func() map[string]any {
+		return doWithPayloadSpan(payload, "server.handle_batch", func() map[string]any {
 			return s.Mixer.HandleBatchMessage(payload)
-		}, "node", s.Name, "component", "mixer", "msg_type", "batch")
+		}, attribute.String("node.name", s.Name), attribute.String("component", "mixer"), attribute.String("msg_type", "batch"))
 	case "verify":
-		return doWithLabels(func() map[string]any {
+		return doWithPayloadSpan(payload, "server.handle_verify", func() map[string]any {
 			return s.Verifier.HandleVerifyMessage(payload)
-		}, "node", s.Name, "component", "verifier", "msg_type", "verify")
+		}, attribute.String("node.name", s.Name), attribute.String("component", "verifier"), attribute.String("msg_type", "verify"))
 	case "prepare":
-		return doWithLabels(func() map[string]any {
+		return doWithPayloadSpan(payload, "server.handle_prepare", func() map[string]any {
 			return s.Verifier.HandlePrepareMessage(payload)
-		}, "node", s.Name, "component", "verifier", "msg_type", "prepare")
+		}, attribute.String("node.name", s.Name), attribute.String("component", "verifier"), attribute.String("msg_type", "prepare"))
 	case "commit":
-		return doWithLabels(func() map[string]any {
+		return doWithPayloadSpan(payload, "server.handle_commit", func() map[string]any {
 			return s.Verifier.HandleCommitMessage(payload)
-		}, "node", s.Name, "component", "verifier", "msg_type", "commit")
+		}, attribute.String("node.name", s.Name), attribute.String("component", "verifier"), attribute.String("msg_type", "commit"))
 	case "view_change":
-		return doWithLabels(func() map[string]any {
+		return doWithPayloadSpan(payload, "server.handle_view_change", func() map[string]any {
 			return s.Verifier.HandleViewChangeMessage(payload)
-		}, "node", s.Name, "component", "verifier", "msg_type", "view_change")
+		}, attribute.String("node.name", s.Name), attribute.String("component", "verifier"), attribute.String("msg_type", "view_change"))
 	case "new_view":
-		return doWithLabels(func() map[string]any {
+		return doWithPayloadSpan(payload, "server.handle_new_view", func() map[string]any {
 			return s.Verifier.HandleNewViewMessage(payload)
-		}, "node", s.Name, "component", "verifier", "msg_type", "new_view")
+		}, attribute.String("node.name", s.Name), attribute.String("component", "verifier"), attribute.String("msg_type", "new_view"))
 	case "verify_response":
-		return doWithLabels(func() map[string]any {
+		return doWithPayloadSpan(payload, "server.handle_verify_response", func() map[string]any {
 			return s.Exec.HandleVerifyResponseMessage(payload)
-		}, "node", s.Name, "component", "exec", "msg_type", "verify_response")
+		}, attribute.String("node.name", s.Name), attribute.String("component", "exec"), attribute.String("msg_type", "verify_response"))
 	case "state_transfer_request":
-		return doWithLabels(func() map[string]any {
+		return doWithPayloadSpan(payload, "server.handle_state_transfer_request", func() map[string]any {
 			return s.Exec.HandleStateTransferRequestMessage(payload)
-		}, "node", s.Name, "component", "exec", "msg_type", "state_transfer_request")
+		}, attribute.String("node.name", s.Name), attribute.String("component", "exec"), attribute.String("msg_type", "state_transfer_request"))
 	default:
 		return map[string]any{"status": "error", "error": "unknown message type"}
 	}
@@ -232,6 +242,9 @@ func (s *Server) HandleReady(payload map[string]any) map[string]any {
 	}
 }
 
-func doWithLabels[T any](fn func() T, _ ...string) T {
+func doWithPayloadSpan[T any](payload map[string]any, name string, fn func() T, attrs ...attribute.KeyValue) T {
+	attrs = append(attrs, telemetry.AttrsFromPayload(payload)...)
+	_, span := telemetry.StartSpanFromPayload(payload, name, attrs...)
+	defer span.End()
 	return fn()
 }

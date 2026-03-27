@@ -10,23 +10,24 @@ import (
 )
 
 type NodeConfig struct {
-	Type                     string   `json:"type"`
-	Service                  string   `json:"service"`
-	Next                     []string `json:"next"`
-	Clients                  []string `json:"clients"`
-	Nodes                    []string `json:"nodes"`
-	Shim                     string   `json:"shim"`
-	IsPrimaryBatcher         bool     `json:"is_primary_batcher"`
-	ExecWorkflow             string   `json:"exec_workflow"`
-	InitStateWorkflow        string   `json:"init_state_workflow"`
-	ClientWorkflow           string   `json:"client_workflow"`
-	ExternalServiceWorkflow  string   `json:"external_service_workflow"`
-	ExternalServiceInitState string   `json:"external_service_init_state"`
-	ShimQuorumSize           int      `json:"shimQuorumSize"`
-	VerifyResponseQuorumSize int      `json:"verifyResponseQuorumSize"`
-	ExecVerifyQuorumSize     int      `json:"execVerifyQuorumSize"`
-	PhaseQuorumSize          int      `json:"phaseQuorumSize"`
-	ExpectedExecVotes        int      `json:"expectedExecVotes"`
+	Type                     string         `json:"type"`
+	Service                  string         `json:"service"`
+	Next                     []string       `json:"next"`
+	Clients                  []string       `json:"clients"`
+	Nodes                    []string       `json:"nodes"`
+	Shim                     string         `json:"shim"`
+	IsPrimaryBatcher         bool           `json:"is_primary_batcher"`
+	ExecWorkflow             string         `json:"exec_workflow"`
+	InitStateWorkflow        string         `json:"init_state_workflow"`
+	ClientWorkflow           string         `json:"client_workflow"`
+	ExternalServiceWorkflow  string         `json:"external_service_workflow"`
+	ExternalServiceInitState string         `json:"external_service_init_state"`
+	ShimQuorumSize           int            `json:"shimQuorumSize"`
+	VerifyResponseQuorumSize int            `json:"verifyResponseQuorumSize"`
+	ExecVerifyQuorumSize     int            `json:"execVerifyQuorumSize"`
+	PhaseQuorumSize          int            `json:"phaseQuorumSize"`
+	ExpectedExecVotes        int            `json:"expectedExecVotes"`
+	RunConfigOverrides       map[string]any `json:"run_config_overrides"`
 }
 
 type RunConfig struct {

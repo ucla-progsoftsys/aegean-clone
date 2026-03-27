@@ -18,6 +18,11 @@ logger = logging.getLogger(__name__)
 
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 REMOTE_RPC_SCRIPT = "/app/remote_rpc.py"
+REMOTE_BINARY_PATH = "/app/bin/aegean-node"
+DEFAULT_REMOTE_CPU_PROFILE_PATH = "/tmp/cpu.pprof"
+DEFAULT_REMOTE_BLOCK_PROFILE_PATH = "/tmp/block.pprof"
+DEFAULT_REMOTE_MUTEX_PROFILE_PATH = "/tmp/mutex.pprof"
+DEFAULT_REMOTE_OTEL_TRACE_PATH = "/tmp/otel-traces.json"
 
 
 def resolve_run_config_paths(run_config_path):
@@ -129,6 +134,20 @@ def collect_logs(run_dir, node_names, client_names):
     for name in node_names:
         local_path = os.path.join(run_dir, f"{name}.log")
         _scp(name, "/tmp/node.log", local_path)
+
+    profiled_node = os.environ.get("AEGEAN_PROFILE_NODE", "").strip()
+    profile_path = os.environ.get("AEGEAN_CPU_PROFILE_PATH", DEFAULT_REMOTE_CPU_PROFILE_PATH).strip() or DEFAULT_REMOTE_CPU_PROFILE_PATH
+    block_profile_path = os.environ.get("AEGEAN_BLOCK_PROFILE_PATH", DEFAULT_REMOTE_BLOCK_PROFILE_PATH).strip() or DEFAULT_REMOTE_BLOCK_PROFILE_PATH
+    mutex_profile_path = os.environ.get("AEGEAN_MUTEX_PROFILE_PATH", DEFAULT_REMOTE_MUTEX_PROFILE_PATH).strip() or DEFAULT_REMOTE_MUTEX_PROFILE_PATH
+    otel_trace_path = os.environ.get("AEGEAN_OTEL_FILE_PATH", DEFAULT_REMOTE_OTEL_TRACE_PATH).strip() or DEFAULT_REMOTE_OTEL_TRACE_PATH
+    if profiled_node:
+        local_profile_path = os.path.join(run_dir, f"{profiled_node}.cpu.pprof")
+        _scp(profiled_node, profile_path, local_profile_path)
+        _scp(profiled_node, block_profile_path, os.path.join(run_dir, f"{profiled_node}.block.pprof"))
+        _scp(profiled_node, mutex_profile_path, os.path.join(run_dir, f"{profiled_node}.mutex.pprof"))
+    for name in node_names:
+        _scp(name, otel_trace_path, os.path.join(run_dir, f"{name}.otel.json"))
+
     logger.info("Log collection complete: %s", run_dir)
 
 
@@ -184,15 +203,48 @@ def _remote_rpc(node_name, path, payload=None, timeout=5):
     return envelope.get("payload", {})
 
 
+def build_binary(build_node):
+    logger.info("Building shared binary on %s", build_node)
+    _ssh_shell(
+        build_node,
+        (
+            "mkdir -p /app/bin /app/.gomodcache /tmp/go-build || exit 1; "
+            "cd /app/src || exit 1; "
+            "export GOMODCACHE=/app/.gomodcache; "
+            "export GOCACHE=/tmp/go-build; "
+            f"go build -o {shlex.quote(REMOTE_BINARY_PATH)} ."
+        ),
+    )
+
+
 def launch_nodes(node_names, config_path):
     logger.info("Launching %d nodes", len(node_names))
+    if node_names:
+        build_binary(node_names[0])
+
     remote_config_path = shlex.quote(f"../{config_path}")
+    profiled_node = os.environ.get("AEGEAN_PROFILE_NODE", "").strip()
+    profile_path = os.environ.get("AEGEAN_CPU_PROFILE_PATH", DEFAULT_REMOTE_CPU_PROFILE_PATH).strip() or DEFAULT_REMOTE_CPU_PROFILE_PATH
+    block_profile_path = os.environ.get("AEGEAN_BLOCK_PROFILE_PATH", DEFAULT_REMOTE_BLOCK_PROFILE_PATH).strip() or DEFAULT_REMOTE_BLOCK_PROFILE_PATH
+    mutex_profile_path = os.environ.get("AEGEAN_MUTEX_PROFILE_PATH", DEFAULT_REMOTE_MUTEX_PROFILE_PATH).strip() or DEFAULT_REMOTE_MUTEX_PROFILE_PATH
+    otel_trace_path = os.environ.get("AEGEAN_OTEL_FILE_PATH", DEFAULT_REMOTE_OTEL_TRACE_PATH).strip() or DEFAULT_REMOTE_OTEL_TRACE_PATH
     for name in node_names:
+        profile_env = ""
+        if name == profiled_node:
+            profile_env = (
+                f"AEGEAN_CPU_PROFILE_PATH={shlex.quote(profile_path)} "
+                f"AEGEAN_BLOCK_PROFILE_PATH={shlex.quote(block_profile_path)} "
+                f"AEGEAN_MUTEX_PROFILE_PATH={shlex.quote(mutex_profile_path)} "
+            )
+        telemetry_env = f"AEGEAN_OTEL_FILE_PATH={shlex.quote(otel_trace_path)} "
         _ssh_shell(
             name,
             (
+                "mkdir -p /app/.gomodcache /tmp/go-build || exit 1; "
                 "cd /app/src || exit 1; "
-                f"nohup go run . --name {shlex.quote(name)} "
+                "export GOMODCACHE=/app/.gomodcache; "
+                "export GOCACHE=/tmp/go-build; "
+                f"nohup env {telemetry_env}{profile_env}{shlex.quote(REMOTE_BINARY_PATH)} --name {shlex.quote(name)} "
                 "--host 0.0.0.0 "
                 "--port 8000 "
                 f"--config {remote_config_path} "
@@ -203,7 +255,16 @@ def launch_nodes(node_names, config_path):
 def stop_docker_nodes(node_names):
     logger.info("Stopping %d nodes", len(node_names))
     for name in node_names:
-        subprocess.run(["ssh", name, "pkill", "-9", "-f", "go"])
+        _ssh_shell(
+            name,
+            (
+                "pkill -TERM -f aegean-node || true; "
+                "pkill -TERM -f 'go run \\.' || true; "
+                "sleep 1; "
+                "pkill -9 -f aegean-node || true; "
+                "pkill -9 -f 'go run \\.' || true"
+            ),
+        )
 
 
 def get_node_ready(node_name):
