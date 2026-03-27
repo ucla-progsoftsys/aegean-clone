@@ -24,7 +24,7 @@ services:
     expectedExecVotes: 3
     batcher_config:
       batch_size: 40
-      batch_timeout_ms: 20
+      batch_timeout_ms: 15
   backend:
     type: server
     clients:
@@ -41,8 +41,8 @@ services:
     phaseQuorumSize: 1
     expectedExecVotes: 1
     batcher_config:
-      batch_size: 20
-      batch_timeout_ms: 10
+      batch_size: 10
+      batch_timeout_ms: 5
 nodes:
   node0:
     service: client
