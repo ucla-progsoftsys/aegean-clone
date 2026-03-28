@@ -10,6 +10,7 @@ import (
 
 	"aegean/common"
 	"aegean/telemetry"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -282,7 +283,10 @@ func (e *Exec) BufferNestedResponse(payload map[string]any) bool {
 	if payload == nil {
 		return false
 	}
-	requestIDRaw, ok := payload["request_id"]
+	requestIDRaw, ok := payload["parent_request_id"]
+	if !ok || requestIDRaw == nil {
+		requestIDRaw, ok = payload["request_id"]
+	}
 	if !ok || requestIDRaw == nil {
 		return false
 	}
@@ -325,16 +329,8 @@ func (e *Exec) runBatchExecutor() {
 	}
 }
 
-func (e *Exec) startRequestDispatchWait(request map[string]any) {
-	_ = request
-}
-
 func (e *Exec) endRequestDispatchWait(request map[string]any) {
 	_ = request
-}
-
-func (e *Exec) startRequestDispatchWaitWithAttrs(request map[string]any, attrs ...attribute.KeyValue) {
-	_, _ = request, attrs
 }
 
 func (e *Exec) startRequestSpan(request map[string]any, contextKey string, spanName string, attrs ...attribute.KeyValue) {

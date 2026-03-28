@@ -132,6 +132,9 @@ func (e *Exec) finalizeCommit(seqNum int, pending pendingExecResult, agreedToken
 			"request_id": requestID,
 			"response":   output,
 		}
+		if parentRequestID, ok := output["parent_request_id"]; ok && parentRequestID != nil {
+			responseMsg["parent_request_id"] = parentRequestID
+		}
 		if requestPayload := e.requestPayloadForSeq(seqNum, requestID); requestPayload != nil {
 			telemetry.CopyContext(responseMsg, requestPayload)
 		}
