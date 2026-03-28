@@ -1,27 +1,44 @@
 #!/usr/bin/env python3
 
+import argparse
 import re
 from pathlib import Path
 
-from plot_utils import collect_data, plot_latency, plot_throughput
-
-
-DEFAULT_RESULTS_DIR = Path(
-    "/Users/jasonliu/Documents/VSCode/aegean-clone/results/basic_closed_large_req_worker"
+from plot_utils import (
+    collect_data,
+    collect_data_aggregated,
+    plot_latency,
+    plot_latency_aggregated,
+    plot_throughput,
+    plot_throughput_aggregated,
 )
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_RESULTS_DIR = REPO_ROOT / "results" / "basic_closed_large_req_worker"
 WORKER_DIR_RE = re.compile(r"worker_(\d+)$")
 
 
 def main() -> None:
-    rows = collect_data(DEFAULT_RESULTS_DIR, "worker_*/node0.log", WORKER_DIR_RE)
-    DEFAULT_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
+    parser.add_argument("--aggregated", action="store_true",
+                        help="Use aggregated multi-run data (expects worker_*/*/node0.log)")
+    args = parser.parse_args()
 
-    throughput_path = DEFAULT_RESULTS_DIR / "throughput_vs_num_workers.png"
-    latency_path = DEFAULT_RESULTS_DIR / "latency_vs_num_workers.png"
+    results_dir = args.results_dir
+    results_dir.mkdir(parents=True, exist_ok=True)
 
-    plot_throughput(rows, throughput_path, "Number of Workers", "Throughput vs Number of Workers")
-    plot_latency(rows, latency_path, "Number of Workers", "Latency vs Number of Workers")
+    throughput_path = results_dir / "throughput_vs_num_workers.png"
+    latency_path = results_dir / "latency_vs_num_workers.png"
+
+    if args.aggregated:
+        rows = collect_data_aggregated(results_dir, "worker_*/*/node0.log", WORKER_DIR_RE)
+        plot_throughput_aggregated(rows, throughput_path, "Number of Workers", "Throughput vs Number of Workers")
+        plot_latency_aggregated(rows, latency_path, "Number of Workers", "Latency vs Number of Workers")
+    else:
+        rows = collect_data(results_dir, "worker_*/node0.log", WORKER_DIR_RE)
+        plot_throughput(rows, throughput_path, "Number of Workers", "Throughput vs Number of Workers")
+        plot_latency(rows, latency_path, "Number of Workers", "Latency vs Number of Workers")
 
     print(f"Wrote {throughput_path}")
     print(f"Wrote {latency_path}")
