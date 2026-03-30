@@ -5,3 +5,4 @@ What improved system performance
 4. Convert HTTP to TCP: network cost is nontrivial especially for a replication protocol
 5. Disabling OpenTelemtry/lots of logging during test time
 6. Having middle service fan out to only the primary batcher of the backend service
+7. If you have a mac, have it be charging
