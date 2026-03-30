@@ -11,6 +11,14 @@ type Mixer struct {
 	NextCh chan<- map[string]any
 }
 
+type socialMixerMode string
+
+const (
+	socialMixerModeConservativeHomeFanout socialMixerMode = "conservative_home_fanout"
+	socialMixerModeNoHomeFanoutKey        socialMixerMode = "no_home_fanout_key"
+	activeSocialMixerMode                 socialMixerMode = socialMixerModeNoHomeFanoutKey
+)
+
 func NewMixer(name string, nextCh chan<- map[string]any) *Mixer {
 	if nextCh == nil {
 		panic("mixer component requires non-nil nextCh")
@@ -51,6 +59,51 @@ func (m *Mixer) getKeys(request map[string]any) (map[string]struct{}, map[string
 		}
 		if key, ok := payload["write_key"].(string); ok {
 			writeKeys[key] = struct{}{}
+		}
+	case "write_user_timeline":
+		if userID, ok := payload["user_id"].(string); ok && userID != "" {
+			writeKeys["user_timeline:"+userID] = struct{}{}
+		}
+	case "read_user_timeline", "ro_read_user_timeline":
+		if userID, ok := payload["user_id"].(string); ok && userID != "" {
+			readKeys["user_timeline:"+userID] = struct{}{}
+		}
+	case "write_home_timeline":
+		switch activeSocialMixerMode {
+		case socialMixerModeConservativeHomeFanout:
+			if userID, ok := payload["user_id"].(string); ok && userID != "" {
+				writeKeys["home_timeline_fanout:"+userID] = struct{}{}
+			}
+		case socialMixerModeNoHomeFanoutKey:
+			// Keep social keys for the other ops, but intentionally skip a mixer key
+			// for write_home_timeline to maximize overlap on the fanout stage.
+		}
+	case "read_home_timeline", "ro_read_home_timeline":
+		if userID, ok := payload["user_id"].(string); ok && userID != "" {
+			readKeys["home_timeline:"+userID] = struct{}{}
+		}
+	case "store_post":
+		if postID, ok := payload["post_id"].(string); ok && postID != "" {
+			writeKeys["post:"+postID] = struct{}{}
+		}
+	case "read_post", "ro_read_post":
+		if postID, ok := payload["post_id"].(string); ok && postID != "" {
+			readKeys["post:"+postID] = struct{}{}
+		}
+	case "read_posts", "ro_read_posts":
+		switch typed := payload["post_ids"].(type) {
+		case []any:
+			for _, raw := range typed {
+				if postID, ok := raw.(string); ok && postID != "" {
+					readKeys["post:"+postID] = struct{}{}
+				}
+			}
+		case []string:
+			for _, postID := range typed {
+				if postID != "" {
+					readKeys["post:"+postID] = struct{}{}
+				}
+			}
 		}
 	}
 

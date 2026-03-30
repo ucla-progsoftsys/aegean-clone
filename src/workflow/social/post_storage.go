@@ -41,7 +41,7 @@ func ExecuteRequestPostStorage(e *exec.Exec, request map[string]any, ndSeed int6
 		if !ok {
 			return errorResponse(requestID, "post not found")
 		}
-		return map[string]any{
+		return attachParentRequestID(request, map[string]any{
 			"request_id": requestID,
 			"status":     "ok",
 			"post": map[string]any{
@@ -50,7 +50,7 @@ func ExecuteRequestPostStorage(e *exec.Exec, request map[string]any, ndSeed int6
 				"text":       post.Text,
 				"creator_id": post.CreatorID,
 			},
-		}
+		})
 	case "read_posts", "ro_read_posts":
 		postIDs := commonPayloadStringSlice(request, "post_ids")
 		posts := make([]map[string]any, 0, len(postIDs))
@@ -66,11 +66,11 @@ func ExecuteRequestPostStorage(e *exec.Exec, request map[string]any, ndSeed int6
 				"creator_id": post.CreatorID,
 			})
 		}
-		return map[string]any{
+		return attachParentRequestID(request, map[string]any{
 			"request_id": requestID,
 			"status":     "ok",
 			"posts":      posts,
-		}
+		})
 	default:
 		return errorResponse(requestID, "unsupported op: "+op)
 	}

@@ -43,6 +43,64 @@ func K6ClosedClientRequestLogic(c *nodes.Client) {
 	}
 }
 
+func K6ClosedReadUserTimelineClientRequestLogic(c *nodes.Client) {
+	duration := common.MustString(c.RunConfig, "duration")
+	runTimeoutSeconds := common.MustInt(c.RunConfig, "run_timeout_seconds")
+	k6VUs := common.MustInt(c.RunConfig, "k6_vus")
+	userCount := common.MustInt(c.RunConfig, "social_user_count")
+	k6CommandDeadline := time.Duration(runTimeoutSeconds) * time.Second
+
+	c.WaitForNodesReady(c.ReadyNodes)
+	k6TargetURL := fmt.Sprintf("http://%s:8000/", c.Name)
+
+	if err := runK6(k6RunConfig{
+		duration:   duration,
+		targetURL:  k6TargetURL,
+		deadline:   k6CommandDeadline,
+		sender:     c.Name,
+		scriptPath: "workflow/social/k6_closed_read_user_timeline.js",
+		extraEnv: []string{
+			"SOCIAL_VUS=" + strconv.Itoa(k6VUs),
+			"SOCIAL_USER_COUNT=" + strconv.Itoa(userCount),
+		},
+	}); err != nil {
+		if err == context.DeadlineExceeded {
+			log.Printf("social k6 closed read user timeline client timed out after %s", k6CommandDeadline)
+			return
+		}
+		log.Printf("social k6 closed read user timeline client failed: %v", err)
+	}
+}
+
+func K6ClosedReadHomeTimelineClientRequestLogic(c *nodes.Client) {
+	duration := common.MustString(c.RunConfig, "duration")
+	runTimeoutSeconds := common.MustInt(c.RunConfig, "run_timeout_seconds")
+	k6VUs := common.MustInt(c.RunConfig, "k6_vus")
+	userCount := common.MustInt(c.RunConfig, "social_user_count")
+	k6CommandDeadline := time.Duration(runTimeoutSeconds) * time.Second
+
+	c.WaitForNodesReady(c.ReadyNodes)
+	k6TargetURL := fmt.Sprintf("http://%s:8000/", c.Name)
+
+	if err := runK6(k6RunConfig{
+		duration:   duration,
+		targetURL:  k6TargetURL,
+		deadline:   k6CommandDeadline,
+		sender:     c.Name,
+		scriptPath: "workflow/social/k6_closed_read_home_timeline.js",
+		extraEnv: []string{
+			"SOCIAL_VUS=" + strconv.Itoa(k6VUs),
+			"SOCIAL_USER_COUNT=" + strconv.Itoa(userCount),
+		},
+	}); err != nil {
+		if err == context.DeadlineExceeded {
+			log.Printf("social k6 closed read home timeline client timed out after %s", k6CommandDeadline)
+			return
+		}
+		log.Printf("social k6 closed read home timeline client failed: %v", err)
+	}
+}
+
 type k6RunConfig struct {
 	duration   string
 	targetURL  string

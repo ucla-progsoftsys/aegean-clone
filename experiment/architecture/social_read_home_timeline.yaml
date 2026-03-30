@@ -1,0 +1,68 @@
+---
+services:
+  client:
+    type: client
+    next:
+    - node1
+    - node2
+    - node3
+    client_workflow: social_k6_closed_read_home_timeline_client
+  home_timeline:
+    type: server
+    clients:
+    - node0
+    nodes:
+    - node1
+    - node2
+    - node3
+    exec_workflow: social_home_timeline
+    init_state_workflow: social_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 10
+  post_storage:
+    type: server
+    clients:
+    - node1
+    - node2
+    - node3
+    nodes:
+    - node4
+    - node5
+    - node6
+    exec_workflow: social_post_storage
+    init_state_workflow: social_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 10
+nodes:
+  node0:
+    service: client
+  node1:
+    service: home_timeline
+    is_primary_batcher: true
+  node2:
+    service: home_timeline
+    is_primary_batcher: false
+  node3:
+    service: home_timeline
+    is_primary_batcher: false
+  node4:
+    service: post_storage
+    is_primary_batcher: true
+  node5:
+    service: post_storage
+    is_primary_batcher: false
+  node6:
+    service: post_storage
+    is_primary_batcher: false

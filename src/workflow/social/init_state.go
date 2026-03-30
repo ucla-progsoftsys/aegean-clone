@@ -9,11 +9,83 @@ import (
 func InitState(e *exec.Exec) map[string]string {
 	serviceName := common.MustString(e.RunConfig, "service_name")
 	switch serviceName {
+	case "post_storage":
+		return initPostStorageState(e)
+	case "user_timeline":
+		return initUserTimelineState(e)
+	case "home_timeline":
+		return initHomeTimelineState(e)
 	case "social_graph":
 		return initSocialGraphState(e)
 	default:
 		return map[string]string{}
 	}
+}
+
+func initPostStorageState(e *exec.Exec) map[string]string {
+	userCount := common.MustInt(e.RunConfig, "social_user_count")
+	postsPerUser := common.IntOrDefault(e.RunConfig, "social_seed_posts_per_user", 0)
+	if userCount <= 0 || postsPerUser <= 0 {
+		return map[string]string{}
+	}
+
+	state := make(map[string]string, userCount*postsPerUser)
+	for userIdx := 0; userIdx < userCount; userIdx++ {
+		userID := socialUserID(userIdx)
+		for postIdx := 0; postIdx < postsPerUser; postIdx++ {
+			post := seededPost(userID, postIdx)
+			state[postKey(post.PostID)] = encodePost(post)
+		}
+	}
+	return state
+}
+
+func initUserTimelineState(e *exec.Exec) map[string]string {
+	userCount := common.MustInt(e.RunConfig, "social_user_count")
+	postsPerUser := common.IntOrDefault(e.RunConfig, "social_seed_posts_per_user", 0)
+	if userCount <= 0 || postsPerUser <= 0 {
+		return map[string]string{}
+	}
+
+	state := make(map[string]string, userCount)
+	for userIdx := 0; userIdx < userCount; userIdx++ {
+		userID := socialUserID(userIdx)
+		postIDs := make([]string, 0, postsPerUser)
+		for postIdx := 0; postIdx < postsPerUser; postIdx++ {
+			postIDs = append(postIDs, seededPost(userID, postIdx).PostID)
+		}
+		state[userTimelineKey(userID)] = encodeStringSlice(postIDs)
+	}
+	return state
+}
+
+func initHomeTimelineState(e *exec.Exec) map[string]string {
+	userCount := common.MustInt(e.RunConfig, "social_user_count")
+	postsPerUser := common.IntOrDefault(e.RunConfig, "social_seed_posts_per_user", 0)
+	followersPerUser := common.IntOrDefault(e.RunConfig, "social_followers_per_user", 3)
+	if userCount <= 0 || postsPerUser <= 0 {
+		return map[string]string{}
+	}
+	if followersPerUser < 0 {
+		followersPerUser = 0
+	}
+	if followersPerUser >= userCount {
+		followersPerUser = userCount - 1
+	}
+
+	state := make(map[string]string, userCount)
+	for userIdx := 0; userIdx < userCount; userIdx++ {
+		userID := socialUserID(userIdx)
+		postIDs := make([]string, 0, followersPerUser*postsPerUser)
+		for offset := 1; offset <= followersPerUser; offset++ {
+			followeeID := socialUserID((userIdx + offset) % userCount)
+			for postIdx := 0; postIdx < postsPerUser; postIdx++ {
+				postIDs = append(postIDs, seededPost(followeeID, postIdx).PostID)
+			}
+		}
+		state[homeTimelineKey(userID)] = encodeStringSlice(appendTimelineEntries([]string{}, postIDs, 10))
+	}
+	return state
 }
 
 func initSocialGraphState(e *exec.Exec) map[string]string {
@@ -52,4 +124,13 @@ func initSocialGraphState(e *exec.Exec) map[string]string {
 
 func socialUserID(userIdx int) string {
 	return fmt.Sprintf("user-%d", userIdx)
+}
+
+func seededPost(userID string, postIdx int) Post {
+	return Post{
+		PostID:    fmt.Sprintf("seed-post-%s-%d", userID, postIdx),
+		Timestamp: int64(postIdx + 1),
+		Text:      fmt.Sprintf("seed post %d for %s", postIdx, userID),
+		CreatorID: userID,
+	}
 }

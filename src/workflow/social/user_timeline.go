@@ -1,6 +1,20 @@
 package socialworkflow
 
-import "aegean/components/exec"
+import (
+	"aegean/components/exec"
+	netx "aegean/net"
+	"aegean/telemetry"
+	"context"
+)
+
+const (
+	userTimelineStageContextKey   = "social_user_timeline_stage"
+	userTimelinePayloadContextKey = "social_user_timeline_payload"
+
+	userTimelineStageAwaitPosts = "await_posts"
+)
+
+const userTimelinePostStoragePrimaryNode = "node4"
 
 func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
@@ -8,6 +22,8 @@ func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int
 
 	requestID := request["request_id"]
 	op, _ := request["op"].(string)
+	stageAny, _ := e.GetRequestContextValue(requestID, userTimelineStageContextKey)
+	stage, _ := stageAny.(string)
 
 	switch op {
 	case "write_user_timeline":
@@ -20,12 +36,82 @@ func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int
 		e.WriteKV(userTimelineKey(userID), encodeStringSlice(appendTimelineEntries(existing, postIDs, 10)))
 		return nestedOkResponse(request)
 	case "read_user_timeline", "ro_read_user_timeline":
-		userID := commonPayloadString(request, "user_id")
-		postIDs := decodeStringSlice(e.ReadKV(userTimelineKey(userID)))
-		return map[string]any{
-			"request_id": requestID,
-			"status":     "ok",
-			"post_ids":   postIDs,
+		switch stage {
+		case "":
+			userID := commonPayloadString(request, "user_id")
+			if userID == "" {
+				return errorResponse(requestID, "missing user_id")
+			}
+			postIDs := decodeStringSlice(e.ReadKV(userTimelineKey(userID)))
+			payload := map[string]any{
+				"user_id":  userID,
+				"post_ids": postIDs,
+			}
+			if !e.SetRequestContextValue(requestID, userTimelinePayloadContextKey, payload) {
+				return errorResponse(requestID, "failed to initialize user timeline context")
+			}
+			if !e.SetRequestContextValue(requestID, userTimelineStageContextKey, userTimelineStageAwaitPosts) {
+				return errorResponse(requestID, "failed to set user timeline stage")
+			}
+
+			outgoing := map[string]any{
+				"type":              "request",
+				"request_id":        nestedRequestID(requestID, "post_storage"),
+				"parent_request_id": requestID,
+				"timestamp":         request["timestamp"],
+				"sender":            e.Name,
+				"op":                "ro_read_posts",
+				"op_payload": map[string]any{
+					"post_ids": postIDs,
+				},
+			}
+			ctx := telemetry.ExtractContext(context.Background(), request)
+			telemetry.InjectContext(ctx, outgoing)
+			go func() {
+				_, _ = netx.SendMessage(userTimelinePostStoragePrimaryNode, 8000, outgoing)
+			}()
+			return blockedForNestedResponse(requestID)
+
+		case userTimelineStageAwaitPosts:
+			nestedResponses, ok := e.GetNestedResponses(requestID)
+			if !ok || len(nestedResponses) == 0 {
+				return blockedForNestedResponse(requestID)
+			}
+			var selected map[string]any
+			for _, nested := range nestedResponses {
+				if shimAggregated, _ := nested["shim_quorum_aggregated"].(bool); !shimAggregated {
+					continue
+				}
+				childRequestID, _ := nested["request_id"].(string)
+				if childRequestID == nestedRequestID(requestID, "post_storage") {
+					selected = nested
+					break
+				}
+			}
+			if selected == nil {
+				return blockedForNestedResponse(requestID)
+			}
+
+			payloadAny, ok := e.GetRequestContextValue(requestID, userTimelinePayloadContextKey)
+			if !ok {
+				return errorResponse(requestID, "missing user timeline payload")
+			}
+			payload, _ := payloadAny.(map[string]any)
+			userID, _ := payload["user_id"].(string)
+
+			nestedResponse, _ := selected["response"].(map[string]any)
+			posts, _ := nestedResponse["posts"].([]any)
+
+			e.ClearRequestContext(requestID)
+			return attachParentRequestID(request, map[string]any{
+				"request_id": requestID,
+				"status":     "ok",
+				"user_id":    userID,
+				"posts":      posts,
+			})
+
+		default:
+			return errorResponse(requestID, "unknown user timeline stage: "+stage)
 		}
 	default:
 		return errorResponse(requestID, "unsupported op: "+op)

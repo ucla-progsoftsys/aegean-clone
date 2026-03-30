@@ -141,18 +141,21 @@ func extractStringSlice(value any) []string {
 }
 
 func nestedOkResponse(request map[string]any) map[string]any {
-	response := map[string]any{
+	return attachParentRequestID(request, map[string]any{
 		"request_id": request["request_id"],
 		"status":     "ok",
-	}
-	if parentRequestID, ok := request["parent_request_id"]; ok && parentRequestID != nil {
-		response["parent_request_id"] = parentRequestID
-	}
-	return response
+	})
 }
 
 func nestedOkResponseWithPostID(request map[string]any, postID string) map[string]any {
 	response := nestedOkResponse(request)
 	response["post_id"] = postID
+	return response
+}
+
+func attachParentRequestID(request map[string]any, response map[string]any) map[string]any {
+	if parentRequestID, ok := request["parent_request_id"]; ok && parentRequestID != nil {
+		response["parent_request_id"] = parentRequestID
+	}
 	return response
 }
