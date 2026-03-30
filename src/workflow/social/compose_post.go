@@ -21,6 +21,9 @@ var composeNestedTargets = map[string]string{
 	"home_timeline": "node10",
 }
 
+// ComposePost is the top-level write workflow:
+// store the post body, append the author's user timeline, and fan the post out
+// into followers' home timelines.
 func ExecuteRequestComposePost(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 	_ = ndTimestamp
@@ -31,10 +34,14 @@ func ExecuteRequestComposePost(e *exec.Exec, request map[string]any, ndSeed int6
 
 	switch stage {
 	case "":
+		// compose_post: validate input, derive the post payload, and fan out to
+		// post_storage, user_timeline, and home_timeline. compose_post itself does
+		// not write KV state; it orchestrates the downstream writes.
 		if commonResponse := validateComposeRequest(request); commonResponse != nil {
 			return commonResponse
 		}
 
+		// Stage 1: materialize the post once, then launch all downstream writes.
 		post := Post{
 			PostID:    deterministicPostID(request),
 			Timestamp: deterministicTimestamp(request),
@@ -60,6 +67,10 @@ func ExecuteRequestComposePost(e *exec.Exec, request map[string]any, ndSeed int6
 		return blockedForNestedResponse(requestID)
 
 	case composeStageAwaitNested:
+		// compose_post: wait for all three downstream services to finish, then
+		// return the final post_id to the client.
+		// Stage 2: wait until post_storage, user_timeline, and home_timeline have
+		// all acknowledged the compose fanout.
 		nestedResponses, ok := e.GetNestedResponses(requestID)
 		if !ok {
 			return blockedForNestedResponse(requestID)
@@ -109,6 +120,8 @@ func dispatchComposeNestedRequests(sender string, request map[string]any, post P
 	timestamp := request["timestamp"]
 	postIDs := []string{post.PostID}
 
+	// Each child gets its own request_id plus the shared parent_request_id so the
+	// parent compose workflow can correlate the three completions.
 	outgoingByTarget := map[string]map[string]any{
 		composeNestedTargets["post_storage"]: {
 			"type":              "request",

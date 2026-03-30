@@ -16,6 +16,8 @@ const (
 
 const userTimelinePostStoragePrimaryNode = "node4"
 
+// UserTimeline stores each author's own recent post IDs and resolves them to
+// full posts on read via post_storage.
 func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 	_ = ndTimestamp
@@ -27,6 +29,9 @@ func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int
 
 	switch op {
 	case "write_user_timeline":
+		// write_user_timeline: append new post IDs into the author's local
+		// user_timeline state. This op does not call other services.
+		// Append the newly created post ID to the author's own timeline index.
 		userID := commonPayloadString(request, "user_id")
 		if userID == "" {
 			return errorResponse(requestID, "missing user_id")
@@ -36,8 +41,12 @@ func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int
 		e.WriteKV(userTimelineKey(userID), encodeStringSlice(appendTimelineEntries(existing, postIDs, 10)))
 		return nestedOkResponse(request)
 	case "read_user_timeline", "ro_read_user_timeline":
+		// read_user_timeline: read the author's stored post IDs locally, then call
+		// post_storage to materialize the final post list.
 		switch stage {
 		case "":
+			// Stage 1: load the stored post IDs for this user and delegate post
+			// materialization to post_storage.
 			userID := commonPayloadString(request, "user_id")
 			if userID == "" {
 				return errorResponse(requestID, "missing user_id")
@@ -73,6 +82,7 @@ func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int
 			return blockedForNestedResponse(requestID)
 
 		case userTimelineStageAwaitPosts:
+			// Stage 2: return the fully expanded post list from post_storage.
 			nestedResponses, ok := e.GetNestedResponses(requestID)
 			if !ok || len(nestedResponses) == 0 {
 				return blockedForNestedResponse(requestID)

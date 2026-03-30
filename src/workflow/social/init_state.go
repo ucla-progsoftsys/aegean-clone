@@ -6,6 +6,8 @@ import (
 	"fmt"
 )
 
+// InitState seeds the subset services independently so each benchmark can start
+// from a realistic social-network dataset without replaying writes first.
 func InitState(e *exec.Exec) map[string]string {
 	serviceName := common.MustString(e.RunConfig, "service_name")
 	switch serviceName {
@@ -29,6 +31,7 @@ func initPostStorageState(e *exec.Exec) map[string]string {
 		return map[string]string{}
 	}
 
+	// Seed concrete post bodies so read workloads can expand timeline indexes.
 	state := make(map[string]string, userCount*postsPerUser)
 	for userIdx := 0; userIdx < userCount; userIdx++ {
 		userID := socialUserID(userIdx)
@@ -47,6 +50,7 @@ func initUserTimelineState(e *exec.Exec) map[string]string {
 		return map[string]string{}
 	}
 
+	// Seed each user's own authored-post index.
 	state := make(map[string]string, userCount)
 	for userIdx := 0; userIdx < userCount; userIdx++ {
 		userID := socialUserID(userIdx)
@@ -73,6 +77,8 @@ func initHomeTimelineState(e *exec.Exec) map[string]string {
 		followersPerUser = userCount - 1
 	}
 
+	// Seed each user's home feed from followee posts so read_home_timeline can run
+	// without first executing compose traffic.
 	state := make(map[string]string, userCount)
 	for userIdx := 0; userIdx < userCount; userIdx++ {
 		userID := socialUserID(userIdx)
@@ -101,6 +107,7 @@ func initSocialGraphState(e *exec.Exec) map[string]string {
 		followersPerUser = userCount - 1
 	}
 
+	// Seed a deterministic ring-like follower graph used by compose fanout.
 	state := make(map[string]string, userCount)
 	for userIdx := 0; userIdx < userCount; userIdx++ {
 		userID := socialUserID(userIdx)

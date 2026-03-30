@@ -18,6 +18,9 @@ const (
 const socialGraphPrimaryNode = "node13"
 const homeTimelinePostStoragePrimaryNode = "node4"
 
+// HomeTimeline has two independent responsibilities:
+// write_home_timeline fans a post out to followers, while read_home_timeline
+// resolves stored post IDs into full post objects through post_storage.
 func ExecuteRequestHomeTimeline(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 	_ = ndTimestamp
@@ -29,8 +32,12 @@ func ExecuteRequestHomeTimeline(e *exec.Exec, request map[string]any, ndSeed int
 
 	switch op {
 	case "write_home_timeline":
+		// write_home_timeline: call social_graph to resolve followers, then append
+		// the new post IDs into each follower's local home_timeline state.
 		switch stage {
 		case "":
+			// Stage 1: resolve the creator's followers before mutating any follower
+			// home timeline entries.
 			userID := commonPayloadString(request, "user_id")
 			if userID == "" {
 				return errorResponse(requestID, "missing user_id")
@@ -66,6 +73,7 @@ func ExecuteRequestHomeTimeline(e *exec.Exec, request map[string]any, ndSeed int
 			return blockedForNestedResponse(requestID)
 
 		case homeTimelineStageAwaitFollowers:
+			// Stage 2: apply the fanout locally once the social_graph child returns.
 			nestedResponses, ok := e.GetNestedResponses(requestID)
 			if !ok || len(nestedResponses) == 0 {
 				return blockedForNestedResponse(requestID)
@@ -115,8 +123,12 @@ func ExecuteRequestHomeTimeline(e *exec.Exec, request map[string]any, ndSeed int
 			return errorResponse(requestID, "unknown home timeline stage: "+stage)
 		}
 	case "read_home_timeline", "ro_read_home_timeline":
+		// read_home_timeline: read stored home-timeline post IDs locally, then call
+		// post_storage to expand those IDs into full post objects for the response.
 		switch stage {
 		case "":
+			// Stage 1: read the user's timeline index locally, then fetch the actual
+			// posts from post_storage.
 			userID := commonPayloadString(request, "user_id")
 			if userID == "" {
 				return errorResponse(requestID, "missing user_id")
@@ -152,6 +164,7 @@ func ExecuteRequestHomeTimeline(e *exec.Exec, request map[string]any, ndSeed int
 			return blockedForNestedResponse(requestID)
 
 		case homeTimelineStageAwaitPosts:
+			// Stage 2: return the materialized posts once post_storage responds.
 			nestedResponses, ok := e.GetNestedResponses(requestID)
 			if !ok || len(nestedResponses) == 0 {
 				return blockedForNestedResponse(requestID)
