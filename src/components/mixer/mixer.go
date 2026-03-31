@@ -8,25 +8,19 @@ import (
 )
 
 type Mixer struct {
-	Name   string
-	NextCh chan<- map[string]any
+	Name            string
+	NextCh          chan<- map[string]any
+	SocialMixerMode string
 }
 
-type socialMixerMode string
-
-const (
-	socialMixerModeConservativeHomeFanout socialMixerMode = "conservative_home_fanout"
-	socialMixerModeNoHomeFanoutKey        socialMixerMode = "no_home_fanout_key"
-	activeSocialMixerMode                 socialMixerMode = socialMixerModeNoHomeFanoutKey
-)
-
-func NewMixer(name string, nextCh chan<- map[string]any) *Mixer {
+func NewMixer(name string, nextCh chan<- map[string]any, runConfig map[string]any) *Mixer {
 	if nextCh == nil {
 		panic("mixer component requires non-nil nextCh")
 	}
 	m := &Mixer{
-		Name:   name,
-		NextCh: nextCh,
+		Name:            name,
+		NextCh:          nextCh,
+		SocialMixerMode: mixerkeys.ResolveSocialMixerMode(runConfig),
 	}
 	return m
 }
@@ -38,7 +32,7 @@ func (m *Mixer) getKeys(request map[string]any) (map[string]struct{}, map[string
 	writeKeys := make(map[string]struct{})
 
 	mixerkeys.AddGenericWorkflowKeys(request, payload, readKeys, writeKeys)
-	mixerkeys.AddSocialWorkflowKeys(request, payload, readKeys, writeKeys, string(activeSocialMixerMode))
+	mixerkeys.AddSocialWorkflowKeys(request, payload, readKeys, writeKeys, string(m.SocialMixerMode))
 
 	return readKeys, writeKeys
 }

@@ -70,7 +70,7 @@ func NewServer(name, host string, port int, clients []string, nodes []string, is
 	// Init each component
 	server.Shim = shim.NewShim(name, shimToBatcher, shimToExec, clients, peers, isPrimaryBatcher, shimQuorumSize)
 	server.Batcher = batcher.NewBatcher(name, batcherToMixer, nodes, isPrimaryBatcher, runConfig)
-	server.Mixer = mixer.NewMixer(name, mixerToExec)
+	server.Mixer = mixer.NewMixer(name, mixerToExec, runConfig)
 	server.Exec = exec.NewExec(name, nodes, peers, execToVerifier, execToShim, verifyResponseQuorumSize, executeRequest, initStateFn, runConfig)
 	server.Verifier = verifier.NewVerifier(name, nodes, nodes, verifierToExec, execVerifyQuorumSize, phaseQuorumSize, expectedExecVotes)
 
