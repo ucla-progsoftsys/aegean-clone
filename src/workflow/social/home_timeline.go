@@ -23,7 +23,6 @@ const homeTimelinePostStoragePrimaryNode = "node4"
 // resolves stored post IDs into full post objects through post_storage.
 func ExecuteRequestHomeTimeline(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
-	_ = ndTimestamp
 
 	requestID := request["request_id"]
 	op, _ := request["op"].(string)
@@ -58,7 +57,7 @@ func ExecuteRequestHomeTimeline(e *exec.Exec, request map[string]any, ndSeed int
 				"type":              "request",
 				"request_id":        nestedRequestID(requestID, "social_graph"),
 				"parent_request_id": requestID,
-				"timestamp":         request["timestamp"],
+				"timestamp":         ndTimestamp,
 				"sender":            e.Name,
 				"op":                "get_followers",
 				"op_payload": map[string]any{
@@ -149,7 +148,7 @@ func ExecuteRequestHomeTimeline(e *exec.Exec, request map[string]any, ndSeed int
 				"type":              "request",
 				"request_id":        nestedRequestID(requestID, "post_storage"),
 				"parent_request_id": requestID,
-				"timestamp":         request["timestamp"],
+				"timestamp":         ndTimestamp,
 				"sender":            e.Name,
 				"op":                "ro_read_posts",
 				"op_payload": map[string]any{

@@ -1,7 +1,6 @@
 package socialworkflow
 
 import (
-	"aegean/common"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -31,12 +30,15 @@ func nestedRequestID(parentRequestID any, serviceName string) string {
 	return fmt.Sprintf("%v/%s", parentRequestID, serviceName)
 }
 
-func deterministicTimestamp(request map[string]any) int64 {
-	timestamp := common.GetFloat(request, "timestamp")
-	if timestamp == 0 {
+func deterministicTimestamp(ndTimestamp float64) int64 {
+	// TODO: This currently uses the batch-level ndTimestamp rather than the original
+	// client request time. That keeps timestamp assignment deterministic inside
+	// exec, but it is not an accurate per-request event timestamp because every
+	// request in the same batch shares the same value.
+	if ndTimestamp == 0 {
 		return 0
 	}
-	return int64(timestamp * 1_000_000)
+	return int64(ndTimestamp * 1_000_000)
 }
 
 func decodePost(raw string) (Post, bool) {

@@ -20,7 +20,6 @@ const userTimelinePostStoragePrimaryNode = "node4"
 // full posts on read via post_storage.
 func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
-	_ = ndTimestamp
 
 	requestID := request["request_id"]
 	op, _ := request["op"].(string)
@@ -67,7 +66,7 @@ func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int
 				"type":              "request",
 				"request_id":        nestedRequestID(requestID, "post_storage"),
 				"parent_request_id": requestID,
-				"timestamp":         request["timestamp"],
+				"timestamp":         ndTimestamp,
 				"sender":            e.Name,
 				"op":                "ro_read_posts",
 				"op_payload": map[string]any{

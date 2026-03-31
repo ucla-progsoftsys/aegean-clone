@@ -26,7 +26,6 @@ var composeNestedTargets = map[string]string{
 // into followers' home timelines.
 func ExecuteRequestComposePost(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
-	_ = ndTimestamp
 
 	requestID := request["request_id"]
 	stageAny, _ := e.GetRequestContextValue(requestID, composeStageContextKey)
@@ -44,7 +43,7 @@ func ExecuteRequestComposePost(e *exec.Exec, request map[string]any, ndSeed int6
 		// Stage 1: materialize the post once, then launch all downstream writes.
 		post := Post{
 			PostID:    deterministicPostID(request),
-			Timestamp: deterministicTimestamp(request),
+			Timestamp: deterministicTimestamp(ndTimestamp),
 			Text:      commonPayloadString(request, "text"),
 			CreatorID: commonPayloadString(request, "creator_id"),
 		}
@@ -63,7 +62,7 @@ func ExecuteRequestComposePost(e *exec.Exec, request map[string]any, ndSeed int6
 			}
 		}
 
-		dispatchComposeNestedRequests(e.Name, request, post)
+		dispatchComposeNestedRequests(e.Name, request, post, ndTimestamp)
 		return blockedForNestedResponse(requestID)
 
 	case composeStageAwaitNested:
@@ -114,10 +113,9 @@ func validateComposeRequest(request map[string]any) map[string]any {
 	return nil
 }
 
-func dispatchComposeNestedRequests(sender string, request map[string]any, post Post) {
+func dispatchComposeNestedRequests(sender string, request map[string]any, post Post, ndTimestamp float64) {
 	ctx := telemetry.ExtractContext(context.Background(), request)
 	parentRequestID := request["request_id"]
-	timestamp := request["timestamp"]
 	postIDs := []string{post.PostID}
 
 	// Each child gets its own request_id plus the shared parent_request_id so the
@@ -127,7 +125,7 @@ func dispatchComposeNestedRequests(sender string, request map[string]any, post P
 			"type":              "request",
 			"request_id":        nestedRequestID(parentRequestID, "post_storage"),
 			"parent_request_id": parentRequestID,
-			"timestamp":         timestamp,
+			"timestamp":         ndTimestamp,
 			"sender":            sender,
 			"op":                "store_post",
 			"op_payload": map[string]any{
@@ -141,7 +139,7 @@ func dispatchComposeNestedRequests(sender string, request map[string]any, post P
 			"type":              "request",
 			"request_id":        nestedRequestID(parentRequestID, "user_timeline"),
 			"parent_request_id": parentRequestID,
-			"timestamp":         timestamp,
+			"timestamp":         ndTimestamp,
 			"sender":            sender,
 			"op":                "write_user_timeline",
 			"op_payload": map[string]any{
@@ -153,7 +151,7 @@ func dispatchComposeNestedRequests(sender string, request map[string]any, post P
 			"type":              "request",
 			"request_id":        nestedRequestID(parentRequestID, "home_timeline"),
 			"parent_request_id": parentRequestID,
-			"timestamp":         timestamp,
+			"timestamp":         ndTimestamp,
 			"sender":            sender,
 			"op":                "write_home_timeline",
 			"op_payload": map[string]any{
