@@ -14,7 +14,7 @@ const (
 	userTimelineStageAwaitPosts = "await_posts"
 )
 
-const userTimelinePostStoragePrimaryNode = "node4"
+var userTimelinePostStorageTargets = []string{"node4", "node5", "node6"}
 
 // UserTimeline stores each author's own recent post IDs and resolves them to
 // full posts on read via post_storage.
@@ -75,9 +75,15 @@ func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int
 			}
 			ctx := telemetry.ExtractContext(context.Background(), request)
 			telemetry.InjectContext(ctx, outgoing)
-			go func() {
-				_, _ = netx.SendMessage(userTimelinePostStoragePrimaryNode, 8000, outgoing)
-			}()
+			for _, target := range nestedRequestTargets(e.RunConfig, userTimelinePostStorageTargets) {
+				duplicated := make(map[string]any, len(outgoing))
+				for key, value := range outgoing {
+					duplicated[key] = value
+				}
+				go func(target string, outgoing map[string]any) {
+					_, _ = netx.SendMessage(target, 8000, outgoing)
+				}(target, duplicated)
+			}
 			return blockedForNestedResponse(requestID)
 
 		case userTimelineStageAwaitPosts:

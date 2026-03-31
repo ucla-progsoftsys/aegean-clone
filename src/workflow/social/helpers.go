@@ -1,6 +1,7 @@
 package socialworkflow
 
 import (
+	"aegean/common"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -28,6 +29,18 @@ func deterministicPostID(request map[string]any) string {
 
 func nestedRequestID(parentRequestID any, serviceName string) string {
 	return fmt.Sprintf("%v/%s", parentRequestID, serviceName)
+}
+
+func nestedRequestTargets(runConfig map[string]any, replicas []string) []string {
+	// social_nested_send_all_replicas controls whether nested social RPCs are
+	// sent only to the primary replica or broadcast to every replica.
+	if len(replicas) == 0 {
+		return nil
+	}
+	if !common.BoolOrDefault(runConfig, "social_nested_send_all_replicas", false) {
+		return []string{replicas[0]}
+	}
+	return append([]string{}, replicas...)
 }
 
 func deterministicTimestamp(ndTimestamp float64) int64 {

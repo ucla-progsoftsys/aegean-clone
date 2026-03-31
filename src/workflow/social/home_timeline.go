@@ -15,8 +15,8 @@ const (
 	homeTimelineStageAwaitPosts     = "await_posts"
 )
 
-const socialGraphPrimaryNode = "node13"
-const homeTimelinePostStoragePrimaryNode = "node4"
+var socialGraphTargets = []string{"node13", "node14", "node15"}
+var homeTimelinePostStorageTargets = []string{"node4", "node5", "node6"}
 
 // HomeTimeline has two independent responsibilities:
 // write_home_timeline fans a post out to followers, while read_home_timeline
@@ -66,9 +66,15 @@ func ExecuteRequestHomeTimeline(e *exec.Exec, request map[string]any, ndSeed int
 			}
 			ctx := telemetry.ExtractContext(context.Background(), request)
 			telemetry.InjectContext(ctx, outgoing)
-			go func() {
-				_, _ = netx.SendMessage(socialGraphPrimaryNode, 8000, outgoing)
-			}()
+			for _, target := range nestedRequestTargets(e.RunConfig, socialGraphTargets) {
+				duplicated := make(map[string]any, len(outgoing))
+				for key, value := range outgoing {
+					duplicated[key] = value
+				}
+				go func(target string, outgoing map[string]any) {
+					_, _ = netx.SendMessage(target, 8000, outgoing)
+				}(target, duplicated)
+			}
 			return blockedForNestedResponse(requestID)
 
 		case homeTimelineStageAwaitFollowers:
@@ -157,9 +163,15 @@ func ExecuteRequestHomeTimeline(e *exec.Exec, request map[string]any, ndSeed int
 			}
 			ctx := telemetry.ExtractContext(context.Background(), request)
 			telemetry.InjectContext(ctx, outgoing)
-			go func() {
-				_, _ = netx.SendMessage(homeTimelinePostStoragePrimaryNode, 8000, outgoing)
-			}()
+			for _, target := range nestedRequestTargets(e.RunConfig, homeTimelinePostStorageTargets) {
+				duplicated := make(map[string]any, len(outgoing))
+				for key, value := range outgoing {
+					duplicated[key] = value
+				}
+				go func(target string, outgoing map[string]any) {
+					_, _ = netx.SendMessage(target, 8000, outgoing)
+				}(target, duplicated)
+			}
 			return blockedForNestedResponse(requestID)
 
 		case homeTimelineStageAwaitPosts:

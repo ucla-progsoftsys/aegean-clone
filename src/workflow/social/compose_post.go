@@ -15,10 +15,10 @@ const (
 	composeStageAwaitNested = "await_nested"
 )
 
-var composeNestedTargets = map[string]string{
-	"post_storage":  "node4",
-	"user_timeline": "node7",
-	"home_timeline": "node10",
+var composeNestedTargets = map[string][]string{
+	"post_storage":  {"node4", "node5", "node6"},
+	"user_timeline": {"node7", "node8", "node9"},
+	"home_timeline": {"node10", "node11", "node12"},
 }
 
 // ComposePost is the top-level write workflow:
@@ -62,7 +62,7 @@ func ExecuteRequestComposePost(e *exec.Exec, request map[string]any, ndSeed int6
 			}
 		}
 
-		dispatchComposeNestedRequests(e.Name, request, post, ndTimestamp)
+		dispatchComposeNestedRequests(e.Name, e.RunConfig, request, post, ndTimestamp)
 		return blockedForNestedResponse(requestID)
 
 	case composeStageAwaitNested:
@@ -113,7 +113,7 @@ func validateComposeRequest(request map[string]any) map[string]any {
 	return nil
 }
 
-func dispatchComposeNestedRequests(sender string, request map[string]any, post Post, ndTimestamp float64) {
+func dispatchComposeNestedRequests(sender string, runConfig map[string]any, request map[string]any, post Post, ndTimestamp float64) {
 	ctx := telemetry.ExtractContext(context.Background(), request)
 	parentRequestID := request["request_id"]
 	postIDs := []string{post.PostID}
@@ -121,7 +121,7 @@ func dispatchComposeNestedRequests(sender string, request map[string]any, post P
 	// Each child gets its own request_id plus the shared parent_request_id so the
 	// parent compose workflow can correlate the three completions.
 	outgoingByTarget := map[string]map[string]any{
-		composeNestedTargets["post_storage"]: {
+		composeNestedTargets["post_storage"][0]: {
 			"type":              "request",
 			"request_id":        nestedRequestID(parentRequestID, "post_storage"),
 			"parent_request_id": parentRequestID,
@@ -135,7 +135,7 @@ func dispatchComposeNestedRequests(sender string, request map[string]any, post P
 				"text":       post.Text,
 			},
 		},
-		composeNestedTargets["user_timeline"]: {
+		composeNestedTargets["user_timeline"][0]: {
 			"type":              "request",
 			"request_id":        nestedRequestID(parentRequestID, "user_timeline"),
 			"parent_request_id": parentRequestID,
@@ -147,7 +147,7 @@ func dispatchComposeNestedRequests(sender string, request map[string]any, post P
 				"post_ids": postIDs,
 			},
 		},
-		composeNestedTargets["home_timeline"]: {
+		composeNestedTargets["home_timeline"][0]: {
 			"type":              "request",
 			"request_id":        nestedRequestID(parentRequestID, "home_timeline"),
 			"parent_request_id": parentRequestID,
@@ -161,14 +161,20 @@ func dispatchComposeNestedRequests(sender string, request map[string]any, post P
 		},
 	}
 
-	targets := []string{composeNestedTargets["post_storage"], composeNestedTargets["user_timeline"], composeNestedTargets["home_timeline"]}
-	sort.Strings(targets)
-	for _, target := range targets {
-		outgoing := outgoingByTarget[target]
-		telemetry.InjectContext(ctx, outgoing)
-		go func(target string, outgoing map[string]any) {
-			_, _ = netx.SendMessage(target, 8000, outgoing)
-		}(target, outgoing)
+	for _, serviceName := range []string{"post_storage", "user_timeline", "home_timeline"} {
+		serviceTargets := nestedRequestTargets(runConfig, composeNestedTargets[serviceName])
+		sort.Strings(serviceTargets)
+		for _, target := range serviceTargets {
+			outgoing := outgoingByTarget[composeNestedTargets[serviceName][0]]
+			duplicated := make(map[string]any, len(outgoing))
+			for key, value := range outgoing {
+				duplicated[key] = value
+			}
+			telemetry.InjectContext(ctx, duplicated)
+			go func(target string, outgoing map[string]any) {
+				_, _ = netx.SendMessage(target, 8000, outgoing)
+			}(target, duplicated)
+		}
 	}
 }
 
