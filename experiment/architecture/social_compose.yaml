@@ -1,0 +1,155 @@
+---
+services:
+  client:
+    type: client
+    next:
+    - node1
+    - node2
+    - node3
+    client_workflow: social_k6_closed_client
+  compose_post:
+    type: server
+    clients:
+    - node0
+    nodes:
+    - node1
+    - node2
+    - node3
+    exec_workflow: social_compose_post
+    init_state_workflow: social_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 30
+  post_storage:
+    type: server
+    clients:
+    - node1
+    - node2
+    - node3
+    nodes:
+    - node4
+    - node5
+    - node6
+    exec_workflow: social_post_storage
+    init_state_workflow: social_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 10
+  user_timeline:
+    type: server
+    clients:
+    - node1
+    - node2
+    - node3
+    nodes:
+    - node7
+    - node8
+    - node9
+    exec_workflow: social_user_timeline
+    init_state_workflow: social_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 10
+  home_timeline:
+    type: server
+    clients:
+    - node1
+    - node2
+    - node3
+    nodes:
+    - node10
+    - node11
+    - node12
+    exec_workflow: social_home_timeline
+    init_state_workflow: social_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 10
+  social_graph:
+    type: server
+    clients:
+    - node10
+    - node11
+    - node12
+    nodes:
+    - node13
+    - node14
+    - node15
+    exec_workflow: social_social_graph
+    init_state_workflow: social_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 10
+nodes:
+  node0:
+    service: client
+  node1:
+    service: compose_post
+    is_primary_batcher: true
+  node2:
+    service: compose_post
+    is_primary_batcher: false
+  node3:
+    service: compose_post
+    is_primary_batcher: false
+  node4:
+    service: post_storage
+    is_primary_batcher: true
+  node5:
+    service: post_storage
+    is_primary_batcher: false
+  node6:
+    service: post_storage
+    is_primary_batcher: false
+  node7:
+    service: user_timeline
+    is_primary_batcher: true
+  node8:
+    service: user_timeline
+    is_primary_batcher: false
+  node9:
+    service: user_timeline
+    is_primary_batcher: false
+  node10:
+    service: home_timeline
+    is_primary_batcher: true
+  node11:
+    service: home_timeline
+    is_primary_batcher: false
+  node12:
+    service: home_timeline
+    is_primary_batcher: false
+  node13:
+    service: social_graph
+    is_primary_batcher: true
+  node14:
+    service: social_graph
+    is_primary_batcher: false
+  node15:
+    service: social_graph
+    is_primary_batcher: false

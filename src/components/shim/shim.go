@@ -85,6 +85,9 @@ func (s *Shim) HandleOutgoingResponse(payload map[string]any) map[string]any {
 		"response":   responseData,
 		"sender":     sender,
 	}
+	if parentRequestID, ok := payload["parent_request_id"]; ok && parentRequestID != nil {
+		fullResponse["parent_request_id"] = parentRequestID
+	}
 	telemetry.CopyContext(fullResponse, payload)
 
 	// Handle response from exec - broadcast to all clients that sent the request
