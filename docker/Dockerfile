@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     openssh-server \
     ca-certificates \
     python3-yaml \
+    redis-server \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
@@ -64,6 +65,7 @@ WORKDIR /app
 # Expose ports
 EXPOSE 22
 EXPOSE 8000-8100
+EXPOSE 6379
 
-# Start SSH and keep container running
-CMD ["/usr/sbin/sshd", "-D"]
+# Start SSH and optionally Redis
+CMD ["/app/docker/entrypoint.sh"]
