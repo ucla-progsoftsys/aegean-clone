@@ -36,8 +36,8 @@ func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int
 			return errorResponse(requestID, "missing user_id")
 		}
 		postIDs := commonPayloadStringSlice(request, "post_ids")
-		existing := decodeStringSlice(e.ReadKV(userTimelineKey(userID)))
-		e.WriteKV(userTimelineKey(userID), encodeStringSlice(appendTimelineEntries(existing, postIDs, 10)))
+		existing := decodeStringSlice(socialReadKV(e, userTimelineKey(userID)))
+		socialWriteKV(e, userTimelineKey(userID), encodeStringSlice(appendTimelineEntries(existing, postIDs, 10)))
 		return nestedOkResponse(request)
 	case "read_user_timeline", "ro_read_user_timeline":
 		// read_user_timeline: read the author's stored post IDs locally, then call
@@ -50,7 +50,7 @@ func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int
 			if userID == "" {
 				return errorResponse(requestID, "missing user_id")
 			}
-			postIDs := decodeStringSlice(e.ReadKV(userTimelineKey(userID)))
+			postIDs := decodeStringSlice(socialReadKV(e, userTimelineKey(userID)))
 			payload := map[string]any{
 				"user_id":  userID,
 				"post_ids": postIDs,

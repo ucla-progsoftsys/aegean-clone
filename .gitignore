@@ -3,3 +3,5 @@ __pycache__/
 results/
 bin/
 .gomodcache/
+dump.rdb
+appendonlydir/

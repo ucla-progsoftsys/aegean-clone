@@ -12,7 +12,10 @@ func (s *execScheduler) nextRunnableRequest(batch *parallelBatchRuntime) *schedu
 		case requestFinished, requestExecuting:
 			continue
 		case requestWaiting:
-			if s.hasNestedResponse(req.id) {
+			// Wake a waiting request only if the number of buffered nested
+			// responses is greater than the count it had already seen when it
+			// last blocked.
+			if s.nestedResponseCount(req.id) > req.nestedSeen {
 				req.state = requestRunnable
 				return req
 			}
@@ -80,7 +83,7 @@ func (s *execScheduler) batchHasRunnableRequest(batch *parallelBatchRuntime) boo
 		case requestRunnable:
 			return true
 		case requestWaiting:
-			if s.hasNestedResponse(req.id) {
+			if s.nestedResponseCount(req.id) > req.nestedSeen {
 				return true
 			}
 		}

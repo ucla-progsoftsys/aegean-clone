@@ -42,6 +42,12 @@ func (s *execScheduler) hasNestedResponse(requestID string) bool {
 	return len(s.nestedResponses[requestID]) > 0
 }
 
+func (s *execScheduler) nestedResponseCount(requestID string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.nestedResponses[requestID])
+}
+
 func (s *execScheduler) getNestedResponses(requestID string) ([]map[string]any, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

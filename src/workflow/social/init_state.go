@@ -10,18 +10,21 @@ import (
 // from a realistic social-network dataset without replaying writes first.
 func InitState(e *exec.Exec) map[string]string {
 	serviceName := common.MustString(e.RunConfig, "service_name")
+	var state map[string]string
 	switch serviceName {
 	case "post_storage":
-		return initPostStorageState(e)
+		state = initPostStorageState(e)
 	case "user_timeline":
-		return initUserTimelineState(e)
+		state = initUserTimelineState(e)
 	case "home_timeline":
-		return initHomeTimelineState(e)
+		state = initHomeTimelineState(e)
 	case "social_graph":
-		return initSocialGraphState(e)
+		state = initSocialGraphState(e)
 	default:
-		return map[string]string{}
+		state = map[string]string{}
 	}
+	socialPersistStateSeed(state)
+	return state
 }
 
 func initPostStorageState(e *exec.Exec) map[string]string {

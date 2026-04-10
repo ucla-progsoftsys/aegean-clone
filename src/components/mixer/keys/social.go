@@ -37,9 +37,11 @@ func AddSocialWorkflowKeys(request map[string]any, payload map[string]any, readK
 	case "write_home_timeline":
 		switch activeSocialMixerMode {
 		case SocialMixerModeConservativeHomeFanout:
-			if userID, ok := payload["user_id"].(string); ok && userID != "" {
-				writeKeys["home_timeline_fanout:"+userID] = struct{}{}
-			}
+			// Fanout writes update follower feed keys discovered at runtime via
+			// social_graph, so different creators can still touch overlapping
+			// home_timeline entries. Use one shared key to force a deterministic
+			// order for all write_home_timeline requests within a batch.
+			writeKeys["home_timeline_fanout"] = struct{}{}
 		case SocialMixerModeNoHomeFanoutKey:
 			// Keep social keys for the other ops, but intentionally skip a mixer key
 			// for write_home_timeline to maximize overlap on the fanout stage.

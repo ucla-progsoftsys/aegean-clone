@@ -109,8 +109,8 @@ func ExecuteRequestHomeTimeline(e *exec.Exec, request map[string]any, ndSeed int
 			nestedResponse, _ := selected["response"].(map[string]any)
 			followers := extractStringSlice(nestedResponse["followers"])
 			for _, follower := range followers {
-				existing := decodeStringSlice(e.ReadKV(homeTimelineKey(follower)))
-				e.WriteKV(homeTimelineKey(follower), encodeStringSlice(appendTimelineEntries(existing, postIDs, 10)))
+				existing := decodeStringSlice(socialReadKV(e, homeTimelineKey(follower)))
+				socialWriteKV(e, homeTimelineKey(follower), encodeStringSlice(appendTimelineEntries(existing, postIDs, 10)))
 			}
 			e.ClearRequestContext(requestID)
 			response := map[string]any{
@@ -138,7 +138,7 @@ func ExecuteRequestHomeTimeline(e *exec.Exec, request map[string]any, ndSeed int
 			if userID == "" {
 				return errorResponse(requestID, "missing user_id")
 			}
-			postIDs := decodeStringSlice(e.ReadKV(homeTimelineKey(userID)))
+			postIDs := decodeStringSlice(socialReadKV(e, homeTimelineKey(userID)))
 			payload := map[string]any{
 				"user_id":  userID,
 				"post_ids": postIDs,
