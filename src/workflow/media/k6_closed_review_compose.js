@@ -1,0 +1,46 @@
+import http from 'k6/http';
+import exec from 'k6/execution';
+
+const userCount = Number(__ENV.MEDIA_USER_COUNT || 1000);
+const movieCount = Number(__ENV.MEDIA_MOVIE_COUNT || 1000);
+const textLength = Number(__ENV.MEDIA_REVIEW_TEXT_LENGTH || 256);
+
+function makeReviewText(requestIdx) {
+  const prefix = `review-${requestIdx}-`;
+  if (prefix.length >= textLength) {
+    return prefix.slice(0, textLength);
+  }
+  return prefix + 'x'.repeat(textLength - prefix.length);
+}
+
+export const options = {
+  scenarios: {
+    default: {
+      executor: 'constant-vus',
+      vus: Number(__ENV.MEDIA_VUS || 1),
+      duration: __ENV.DURATION,
+    },
+  },
+};
+
+export default function () {
+  const requestIdx = exec.scenario.iterationInTest + 1;
+  const userIdx = requestIdx % userCount;
+  const movieIdx = requestIdx % movieCount;
+  const body = JSON.stringify({
+    timestamp: Date.now() / 1000,
+    sender: __ENV.SENDER,
+    op: 'compose_review',
+    op_payload: {
+      username: `username_${userIdx}`,
+      password: `password_${userIdx}`,
+      title: `movie-title-${movieIdx}`,
+      rating: requestIdx % 11,
+      text: makeReviewText(requestIdx),
+    },
+  });
+
+  http.post(__ENV.TARGET_URL, body, {
+    headers: { 'Content-Type': 'application/json' },
+  });
+}

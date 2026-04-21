@@ -1,6 +1,6 @@
 # Docker Compose for Aegean local cluster
-# Creates 21 "fake" nodes on a single network for testing
-# App ports: 9001-9021 (mapped from internal 8000)
+# Creates 31 "fake" nodes on a single network for testing
+# App ports: 9001-9031 (mapped from internal 8000)
 
 networks:
   aegean-net:
@@ -39,9 +39,30 @@ x-node-common: &node-common
     - "node18:10.0.0.28"
     - "node19:10.0.0.29"
     - "node20:10.0.0.30"
+    - "node21:10.0.0.31"
+    - "node22:10.0.0.32"
+    - "node23:10.0.0.33"
+    - "node24:10.0.0.34"
+    - "node25:10.0.0.35"
+    - "node26:10.0.0.36"
+    - "node27:10.0.0.37"
+    - "node28:10.0.0.38"
+    - "node29:10.0.0.39"
+    - "node30:10.0.0.40"
   restart: unless-stopped
 
 services:
+  media-redis:
+    image: redis:7
+    hostname: media-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - media-redis-data:/data
+    networks:
+      - aegean-net
+
   node0:
     <<: *node-common
     hostname: node0
@@ -251,3 +272,106 @@ services:
     networks:
       aegean-net:
         ipv4_address: 10.0.0.30
+
+  node21:
+    <<: *node-common
+    hostname: node21
+    ports:
+      - "2222:22"
+      - "9022:8000"
+    networks:
+      aegean-net:
+        ipv4_address: 10.0.0.31
+
+  node22:
+    <<: *node-common
+    hostname: node22
+    ports:
+      - "2223:22"
+      - "9023:8000"
+    networks:
+      aegean-net:
+        ipv4_address: 10.0.0.32
+
+  node23:
+    <<: *node-common
+    hostname: node23
+    ports:
+      - "2224:22"
+      - "9024:8000"
+    networks:
+      aegean-net:
+        ipv4_address: 10.0.0.33
+
+  node24:
+    <<: *node-common
+    hostname: node24
+    ports:
+      - "2225:22"
+      - "9025:8000"
+    networks:
+      aegean-net:
+        ipv4_address: 10.0.0.34
+
+  node25:
+    <<: *node-common
+    hostname: node25
+    ports:
+      - "2226:22"
+      - "9026:8000"
+    networks:
+      aegean-net:
+        ipv4_address: 10.0.0.35
+
+  node26:
+    <<: *node-common
+    hostname: node26
+    ports:
+      - "2227:22"
+      - "9027:8000"
+    networks:
+      aegean-net:
+        ipv4_address: 10.0.0.36
+
+  node27:
+    <<: *node-common
+    hostname: node27
+    ports:
+      - "2228:22"
+      - "9028:8000"
+    networks:
+      aegean-net:
+        ipv4_address: 10.0.0.37
+
+  node28:
+    <<: *node-common
+    hostname: node28
+    ports:
+      - "2229:22"
+      - "9029:8000"
+    networks:
+      aegean-net:
+        ipv4_address: 10.0.0.38
+
+  node29:
+    <<: *node-common
+    hostname: node29
+    ports:
+      - "2230:22"
+      - "9030:8000"
+    networks:
+      aegean-net:
+        ipv4_address: 10.0.0.39
+
+  node30:
+    <<: *node-common
+    hostname: node30
+    ports:
+      - "2231:22"
+      - "9031:8000"
+    networks:
+      aegean-net:
+        ipv4_address: 10.0.0.40
+
+volumes:
+  media-redis-data:

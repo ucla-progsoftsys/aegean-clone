@@ -1,0 +1,56 @@
+package mediaworkflow
+
+import (
+	"aegean/components/exec"
+	"strconv"
+)
+
+const (
+	mediaRatingStageContextKey = "media_rating_stage"
+	mediaRatingStageAwait      = "await_compose_review"
+)
+
+func ExecuteRequestRating(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+	_ = ndSeed
+
+	requestID := request["request_id"]
+	op, _ := request["op"].(string)
+	if op != "upload_rating" {
+		return mediaErrorResponse(requestID, "unsupported op: "+op)
+	}
+
+	stageAny, _ := e.GetRequestContextValue(requestID, mediaRatingStageContextKey)
+	stage, _ := stageAny.(string)
+	switch stage {
+	case "":
+		payload := mediaRequestPayload(request)
+		movieID := mediaPayloadString(payload, "movie_id")
+		if movieID == "" {
+			return mediaErrorResponse(requestID, "missing movie_id")
+		}
+		rating, ok := mediaPayloadInt(payload, "rating")
+		if !ok {
+			return mediaErrorResponse(requestID, "missing rating")
+		}
+
+		currentSum, _ := strconv.ParseInt(mediaReadKV(e, mediaRatingSumKey(movieID)), 10, 64)
+		currentCount, _ := strconv.ParseInt(mediaReadKV(e, mediaRatingCountKey(movieID)), 10, 64)
+		mediaWriteKV(e, mediaRatingSumKey(movieID), mediaInt64String(currentSum+int64(rating)))
+		mediaWriteKV(e, mediaRatingCountKey(movieID), mediaInt64String(currentCount+1))
+
+		if !e.SetRequestContextValue(requestID, mediaRatingStageContextKey, mediaRatingStageAwait) {
+			return mediaErrorResponse(requestID, "failed to initialize rating context")
+		}
+		reviewRequestID := mediaReviewRequestIDFromPayload(payload, requestID)
+		outgoing := mediaNewNestedRequest(requestID, "compose_review", ndTimestamp, "upload_rating", map[string]any{
+			"review_request_id": reviewRequestID,
+			"rating":            rating,
+		})
+		mediaDispatchNestedRequest(e.Name, e.RunConfig, request, mediaComposeReviewTargets, outgoing)
+		return mediaBlockedForNestedResponse(requestID)
+	case mediaRatingStageAwait:
+		return mediaCompleteAfterComposeResponse(e, request)
+	default:
+		return mediaErrorResponse(requestID, "unknown rating stage: "+stage)
+	}
+}
