@@ -1,0 +1,97 @@
+---
+services:
+  client:
+    type: client
+    next:
+    - node1
+    - node2
+    - node3
+    client_workflow: hotel_k6_closed_client
+  frontend:
+    type: server
+    clients:
+    - node0
+    nodes:
+    - node1
+    - node2
+    - node3
+    exec_workflow: hotel_frontend
+    init_state_workflow: hotel_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 25
+  user:
+    type: server
+    clients:
+    - node1
+    - node2
+    - node3
+    nodes:
+    - node4
+    - node5
+    - node6
+    exec_workflow: hotel_user
+    init_state_workflow: hotel_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 8
+  reservation:
+    type: server
+    clients:
+    - node1
+    - node2
+    - node3
+    nodes:
+    - node7
+    - node8
+    - node9
+    exec_workflow: hotel_reservation
+    init_state_workflow: hotel_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 16
+      batch_timeout_ms: 6
+nodes:
+  node0:
+    service: client
+  node1:
+    service: frontend
+    is_primary_batcher: true
+  node2:
+    service: frontend
+    is_primary_batcher: false
+  node3:
+    service: frontend
+    is_primary_batcher: false
+  node4:
+    service: user
+    is_primary_batcher: true
+  node5:
+    service: user
+    is_primary_batcher: false
+  node6:
+    service: user
+    is_primary_batcher: false
+  node7:
+    service: reservation
+    is_primary_batcher: true
+  node8:
+    service: reservation
+    is_primary_batcher: false
+  node9:
+    service: reservation
+    is_primary_batcher: false

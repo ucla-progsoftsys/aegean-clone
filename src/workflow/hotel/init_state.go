@@ -1,0 +1,99 @@
+package hotelworkflow
+
+import (
+	"aegean/common"
+	"aegean/components/exec"
+	"strconv"
+)
+
+func InitState(e *exec.Exec) map[string]string {
+	serviceName := common.MustString(e.RunConfig, "service_name")
+	var state map[string]string
+	switch serviceName {
+	case "geo":
+		state = initHotelGeoState(e)
+	case "profile":
+		state = initHotelProfileState(e)
+	case "rate":
+		state = initHotelRateState(e)
+	case "recommendation":
+		state = initHotelRecommendationState(e)
+	case "user":
+		state = initHotelUserState(e)
+	case "reservation":
+		state = initHotelReservationState(e)
+	default:
+		state = map[string]string{}
+	}
+	hotelPersistStateSeed(e, state)
+	return state
+}
+
+func initHotelGeoState(e *exec.Exec) map[string]string {
+	hotelCount := common.MustInt(e.RunConfig, "hotel_hotel_count")
+	state := make(map[string]string, hotelCount)
+	for _, point := range hotelSeedGeoPoints(hotelCount) {
+		state[hotelGeoKey(point.HotelID)] = encodeJSON(point)
+	}
+	return state
+}
+
+func initHotelProfileState(e *exec.Exec) map[string]string {
+	hotelCount := common.MustInt(e.RunConfig, "hotel_hotel_count")
+	state := make(map[string]string, hotelCount)
+	for _, profile := range hotelSeedProfiles(hotelCount) {
+		state[hotelProfileKey(profile.ID)] = encodeJSON(profile)
+	}
+	return state
+}
+
+func initHotelRateState(e *exec.Exec) map[string]string {
+	hotelCount := common.MustInt(e.RunConfig, "hotel_hotel_count")
+	state := make(map[string]string, hotelCount)
+	for _, plan := range hotelSeedRatePlans(hotelCount) {
+		state[hotelRateKey(plan.HotelID)] = encodeJSON(plan)
+	}
+	return state
+}
+
+func initHotelRecommendationState(e *exec.Exec) map[string]string {
+	hotelCount := common.MustInt(e.RunConfig, "hotel_hotel_count")
+	state := make(map[string]string, hotelCount)
+	for _, hotel := range hotelSeedRecommendations(hotelCount) {
+		state[hotelRecommendationKey(hotel.HotelID)] = encodeJSON(hotel)
+	}
+	return state
+}
+
+func initHotelUserState(e *exec.Exec) map[string]string {
+	userCount := common.MustInt(e.RunConfig, "hotel_user_count")
+	state := make(map[string]string, userCount)
+	for userIdx := 0; userIdx < userCount; userIdx++ {
+		state[hotelUserKey(hotelSeedUsername(userIdx))] = hotelHashPassword(hotelSeedPassword(userIdx))
+	}
+	return state
+}
+
+func initHotelReservationState(e *exec.Exec) map[string]string {
+	hotelCount := common.MustInt(e.RunConfig, "hotel_hotel_count")
+	capacities := hotelSeedReservationCapacities(hotelCount)
+	counts := hotelSeedReservationCounts(hotelCount)
+	state := make(map[string]string, len(capacities)+len(counts)+1)
+	for hotelID, capacity := range capacities {
+		state[hotelReservationCapacityKey(hotelID)] = strconv.Itoa(capacity)
+	}
+	for key, count := range counts {
+		state[key] = strconv.Itoa(count)
+	}
+	seedRecord := HotelReservationRecord{
+		RequestID:       "seed-alice",
+		HotelID:         "4",
+		CustomerName:    "Alice",
+		InDate:          "2015-04-09",
+		OutDate:         "2015-04-10",
+		RoomNumber:      1,
+		CreatedAtMicros: 0,
+	}
+	state[hotelReservationRecordKey(seedRecord.RequestID)] = encodeJSON(seedRecord)
+	return state
+}

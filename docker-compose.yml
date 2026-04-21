@@ -63,6 +63,17 @@ services:
     networks:
       - aegean-net
 
+  hotel-redis:
+    image: redis:7
+    hostname: hotel-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - hotel-redis-data:/data
+    networks:
+      - aegean-net
+
   node0:
     <<: *node-common
     hostname: node0
@@ -375,3 +386,4 @@ services:
 
 volumes:
   media-redis-data:
+  hotel-redis-data:

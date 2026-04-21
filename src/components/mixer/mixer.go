@@ -32,6 +32,7 @@ func (m *Mixer) getKeys(request map[string]any) (map[string]struct{}, map[string
 	writeKeys := make(map[string]struct{})
 
 	mixerkeys.AddGenericWorkflowKeys(request, payload, readKeys, writeKeys)
+	mixerkeys.AddHotelWorkflowKeys(request, payload, readKeys, writeKeys)
 	mixerkeys.AddSocialWorkflowKeys(request, payload, readKeys, writeKeys, string(m.SocialMixerMode))
 	mixerkeys.AddMediaWorkflowKeys(request, payload, readKeys, writeKeys)
 

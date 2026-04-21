@@ -5,6 +5,7 @@ import (
 	"aegean/nodes"
 	aegeanworkflow "aegean/workflow/aegean"
 	externalsrvworkflow "aegean/workflow/external_srv"
+	hotelworkflow "aegean/workflow/hotel"
 	mediaworkflow "aegean/workflow/media"
 	reqraceworkflow "aegean/workflow/req_race"
 	socialworkflow "aegean/workflow/social"
@@ -18,6 +19,7 @@ var ClientWorkflows = map[string]func(c *nodes.Client){
 	"aegean_k6_closed_client":                    aegeanworkflow.K6ClosedClientRequestLogic,
 	"external_srv_oha_client":                    externalsrvworkflow.OhaClientRequestLogic,
 	"external_srv_k6_closed_client":              externalsrvworkflow.K6ClosedClientRequestLogic,
+	"hotel_k6_closed_client":                     hotelworkflow.K6ClosedClientRequestLogic,
 	"media_k6_closed_client":                     mediaworkflow.K6ClosedReviewComposeClientRequestLogic,
 	"media_k6_closed_review_compose_client":      mediaworkflow.K6ClosedReviewComposeClientRequestLogic,
 	"req_race_oha_client":                        reqraceworkflow.OhaClientRequestLogic,
@@ -39,6 +41,14 @@ var ExecWorkflows = map[string]exec.ExecuteRequestFunc{
 	"aegean_middle_diverge_2":  aegeanworkflow.ExecuteRequestMiddleDivergeTwoNode,
 	"aegean_middle_diverge_3":  aegeanworkflow.ExecuteRequestMiddleDivergeThreeNode,
 	"external_srv_server":      externalsrvworkflow.ExecuteRequestServer,
+	"hotel_frontend":           hotelworkflow.ExecuteRequestFrontend,
+	"hotel_search":             hotelworkflow.ExecuteRequestSearch,
+	"hotel_geo":                hotelworkflow.ExecuteRequestGeo,
+	"hotel_rate":               hotelworkflow.ExecuteRequestRate,
+	"hotel_profile":            hotelworkflow.ExecuteRequestProfile,
+	"hotel_recommendation":     hotelworkflow.ExecuteRequestRecommendation,
+	"hotel_user":               hotelworkflow.ExecuteRequestUser,
+	"hotel_reservation":        hotelworkflow.ExecuteRequestReservation,
 	"media_review_compose_api": mediaworkflow.ExecuteRequestReviewComposeAPI,
 	"media_user":               mediaworkflow.ExecuteRequestUser,
 	"media_movie_id":           mediaworkflow.ExecuteRequestMovieID,
@@ -66,6 +76,7 @@ var InitStateWorkflows = map[string]exec.InitStateFunc{
 	"default":              aegeanworkflow.InitState,
 	"aegean_default":       aegeanworkflow.InitState,
 	"external_srv_default": externalsrvworkflow.InitState,
+	"hotel_default":        hotelworkflow.InitState,
 	"media_default":        mediaworkflow.InitState,
 	"req_race_default":     reqraceworkflow.InitState,
 	"social_default":       socialworkflow.InitState,
