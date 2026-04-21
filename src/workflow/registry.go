@@ -21,6 +21,7 @@ var ClientWorkflows = map[string]func(c *nodes.Client){
 	"external_srv_k6_closed_client":              externalsrvworkflow.K6ClosedClientRequestLogic,
 	"hotel_k6_closed_client":                     hotelworkflow.K6ClosedClientRequestLogic,
 	"hotel_k6_closed_hotels_client":              hotelworkflow.K6ClosedHotelsClientRequestLogic,
+	"hotel_k6_closed_recommendations_client":     hotelworkflow.K6ClosedRecommendationsClientRequestLogic,
 	"media_k6_closed_client":                     mediaworkflow.K6ClosedReviewComposeClientRequestLogic,
 	"media_k6_closed_review_compose_client":      mediaworkflow.K6ClosedReviewComposeClientRequestLogic,
 	"req_race_oha_client":                        reqraceworkflow.OhaClientRequestLogic,

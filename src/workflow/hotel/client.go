@@ -20,6 +20,10 @@ func K6ClosedHotelsClientRequestLogic(c *nodes.Client) {
 	runHotelClosedClient(c, "workflow/hotel/k6_closed_hotels_client.js")
 }
 
+func K6ClosedRecommendationsClientRequestLogic(c *nodes.Client) {
+	runHotelClosedClient(c, "workflow/hotel/k6_closed_recommendations_client.js")
+}
+
 func runHotelClosedClient(c *nodes.Client, scriptPath string) {
 	duration := common.MustString(c.RunConfig, "duration")
 	runTimeoutSeconds := common.MustInt(c.RunConfig, "run_timeout_seconds")
