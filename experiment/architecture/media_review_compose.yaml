@@ -24,7 +24,7 @@ services:
     expectedExecVotes: 3
     batcher_config:
       batch_size: 24
-      batch_timeout_ms: 30
+      batch_timeout_ms: 25
   user:
     type: server
     clients:
@@ -44,7 +44,7 @@ services:
     expectedExecVotes: 3
     batcher_config:
       batch_size: 24
-      batch_timeout_ms: 10
+      batch_timeout_ms: 8
   movie_id:
     type: server
     clients:
@@ -64,7 +64,7 @@ services:
     expectedExecVotes: 3
     batcher_config:
       batch_size: 24
-      batch_timeout_ms: 10
+      batch_timeout_ms: 8
   text:
     type: server
     clients:
@@ -84,7 +84,7 @@ services:
     expectedExecVotes: 3
     batcher_config:
       batch_size: 24
-      batch_timeout_ms: 10
+      batch_timeout_ms: 8
   unique_id:
     type: server
     clients:
@@ -104,7 +104,7 @@ services:
     expectedExecVotes: 3
     batcher_config:
       batch_size: 24
-      batch_timeout_ms: 10
+      batch_timeout_ms: 8
   rating:
     type: server
     clients:
@@ -123,8 +123,8 @@ services:
     phaseQuorumSize: 2
     expectedExecVotes: 3
     batcher_config:
-      batch_size: 24
-      batch_timeout_ms: 10
+      batch_size: 16
+      batch_timeout_ms: 5
   compose_review:
     type: server
     clients:
@@ -155,8 +155,8 @@ services:
     phaseQuorumSize: 2
     expectedExecVotes: 3
     batcher_config:
-      batch_size: 24
-      batch_timeout_ms: 10
+      batch_size: 12
+      batch_timeout_ms: 4
   review_storage:
     type: server
     clients:
@@ -175,8 +175,8 @@ services:
     phaseQuorumSize: 2
     expectedExecVotes: 3
     batcher_config:
-      batch_size: 24
-      batch_timeout_ms: 10
+      batch_size: 12
+      batch_timeout_ms: 4
   user_review:
     type: server
     clients:
@@ -195,8 +195,8 @@ services:
     phaseQuorumSize: 2
     expectedExecVotes: 3
     batcher_config:
-      batch_size: 24
-      batch_timeout_ms: 10
+      batch_size: 12
+      batch_timeout_ms: 4
   movie_review:
     type: server
     clients:
@@ -215,8 +215,8 @@ services:
     phaseQuorumSize: 2
     expectedExecVotes: 3
     batcher_config:
-      batch_size: 24
-      batch_timeout_ms: 10
+      batch_size: 12
+      batch_timeout_ms: 4
 nodes:
   node0:
     service: client
