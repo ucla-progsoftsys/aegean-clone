@@ -40,3 +40,30 @@ func TestAddHotelWorkflowKeysForMakeReservation(t *testing.T) {
 		}
 	}
 }
+
+func TestAddHotelWorkflowKeysForNearbyAndRecommendation(t *testing.T) {
+	readKeys := map[string]struct{}{}
+	writeKeys := map[string]struct{}{}
+
+	AddHotelWorkflowKeys(
+		map[string]any{"op": "nearby"},
+		map[string]any{},
+		readKeys,
+		writeKeys,
+	)
+	AddHotelWorkflowKeys(
+		map[string]any{"op": "get_recommendations"},
+		map[string]any{},
+		readKeys,
+		writeKeys,
+	)
+
+	for _, key := range []string{"hotel:geo:index", "hotel:recommendation:index"} {
+		if _, ok := readKeys[key]; !ok {
+			t.Fatalf("missing read key %q", key)
+		}
+	}
+	if len(writeKeys) != 0 {
+		t.Fatalf("unexpected write keys: %#v", writeKeys)
+	}
+}

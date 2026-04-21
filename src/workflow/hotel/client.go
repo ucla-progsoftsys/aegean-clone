@@ -13,6 +13,14 @@ import (
 )
 
 func K6ClosedClientRequestLogic(c *nodes.Client) {
+	runHotelClosedClient(c, "workflow/hotel/k6_closed_client.js")
+}
+
+func K6ClosedHotelsClientRequestLogic(c *nodes.Client) {
+	runHotelClosedClient(c, "workflow/hotel/k6_closed_hotels_client.js")
+}
+
+func runHotelClosedClient(c *nodes.Client, scriptPath string) {
 	duration := common.MustString(c.RunConfig, "duration")
 	runTimeoutSeconds := common.MustInt(c.RunConfig, "run_timeout_seconds")
 	k6VUs := common.MustInt(c.RunConfig, "k6_vus")
@@ -28,7 +36,7 @@ func K6ClosedClientRequestLogic(c *nodes.Client) {
 		targetURL:  k6TargetURL,
 		deadline:   k6CommandDeadline,
 		sender:     c.Name,
-		scriptPath: "workflow/hotel/k6_closed_client.js",
+		scriptPath: scriptPath,
 		extraEnv: []string{
 			"HOTEL_VUS=" + strconv.Itoa(k6VUs),
 			"HOTEL_USER_COUNT=" + strconv.Itoa(userCount),

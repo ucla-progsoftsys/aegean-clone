@@ -8,6 +8,8 @@ func AddHotelWorkflowKeys(request map[string]any, payload map[string]any, readKe
 	op, _ := request["op"].(string)
 
 	switch op {
+	case "nearby":
+		readKeys["hotel:geo:index"] = struct{}{}
 	case "check_user":
 		if username, ok := payload["username"].(string); ok && username != "" {
 			readKeys["hotel:user:"+username] = struct{}{}
@@ -16,6 +18,8 @@ func AddHotelWorkflowKeys(request map[string]any, payload map[string]any, readKe
 		addHotelStringSliceKeys(payload["hotel_ids"], "hotel:profile:", readKeys)
 	case "get_rates":
 		addHotelStringSliceKeys(payload["hotel_ids"], "hotel:rate:", readKeys)
+	case "get_recommendations":
+		readKeys["hotel:recommendation:index"] = struct{}{}
 	case "check_availability":
 		hotelIDs := hotelStringSlice(payload["hotel_ids"])
 		stayDates := hotelStayDates(payload["in_date"], payload["out_date"])

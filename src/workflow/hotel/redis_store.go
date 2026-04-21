@@ -4,8 +4,10 @@ import (
 	"aegean/common"
 	"aegean/components/exec"
 	"context"
+	"fmt"
 	"log"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -13,9 +15,9 @@ import (
 )
 
 var (
-	hotelRedisOnce   sync.Once
+	hotelRedisMu     sync.Mutex
 	hotelRedisClient *redis.Client
-	hotelRedisErr    error
+	hotelRedisAddrID string
 )
 
 func hotelRedisEnabled(runConfig map[string]any) bool {
@@ -45,23 +47,36 @@ func getHotelRedisClient(runConfig map[string]any) (*redis.Client, error) {
 	if !hotelRedisEnabled(runConfig) {
 		return nil, nil
 	}
-	hotelRedisOnce.Do(func() {
-		client := redis.NewClient(&redis.Options{
-			Addr:         hotelRedisAddr(runConfig),
-			DialTimeout:  500 * time.Millisecond,
-			ReadTimeout:  500 * time.Millisecond,
-			WriteTimeout: 500 * time.Millisecond,
-		})
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		if err := client.Ping(ctx).Err(); err != nil {
-			hotelRedisErr = err
-			_ = client.Close()
-			return
-		}
-		hotelRedisClient = client
+	addr := hotelRedisAddr(runConfig)
+
+	hotelRedisMu.Lock()
+	defer hotelRedisMu.Unlock()
+
+	if hotelRedisClient != nil && hotelRedisAddrID == addr {
+		return hotelRedisClient, nil
+	}
+	if hotelRedisClient != nil {
+		_ = hotelRedisClient.Close()
+		hotelRedisClient = nil
+		hotelRedisAddrID = ""
+	}
+
+	client := redis.NewClient(&redis.Options{
+		Addr:         addr,
+		DialTimeout:  500 * time.Millisecond,
+		ReadTimeout:  500 * time.Millisecond,
+		WriteTimeout: 500 * time.Millisecond,
 	})
-	return hotelRedisClient, hotelRedisErr
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		_ = client.Close()
+		return nil, err
+	}
+
+	hotelRedisClient = client
+	hotelRedisAddrID = addr
+	return hotelRedisClient, nil
 }
 
 func hotelReadKV(e *exec.Exec, key string) string {
@@ -107,22 +122,108 @@ func hotelWriteKV(e *exec.Exec, key, value string) {
 	}
 }
 
-func hotelPersistStateSeed(e *exec.Exec, state map[string]string) {
+func hotelLoadOrSeedState(e *exec.Exec, serviceName string, seed map[string]string) map[string]string {
+	state := common.CopyStringMap(seed)
 	client, err := getHotelRedisClient(e.RunConfig)
 	if err != nil {
-		log.Printf("hotel redis seed unavailable: %v", err)
-		return
+		log.Printf("hotel redis hydrate unavailable for %s: %v", serviceName, err)
+		return state
 	}
-	if client == nil || len(state) == 0 {
-		return
+	if client == nil {
+		return state
 	}
-	values := make(map[string]any, len(state))
-	for key, value := range state {
-		values[key] = value
+
+	prefixes := hotelServiceStatePrefixes(serviceName)
+	if len(prefixes) > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		persisted, loadErr := hotelLoadStateByPrefixes(ctx, client, prefixes)
+		if loadErr != nil {
+			log.Printf("hotel redis hydrate failed for %s: %v", serviceName, loadErr)
+		} else {
+			for key, value := range persisted {
+				state[key] = value
+			}
+		}
+		if seedErr := hotelSeedMissingState(ctx, client, seed); seedErr != nil {
+			log.Printf("hotel redis seed failed for %s: %v", serviceName, seedErr)
+		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if err := client.MSet(ctx, values).Err(); err != nil {
-		log.Printf("hotel redis seed failed: %v", err)
+
+	return state
+}
+
+func hotelServiceStatePrefixes(serviceName string) []string {
+	switch serviceName {
+	case "geo":
+		return []string{"hotel:geo:"}
+	case "profile":
+		return []string{"hotel:profile:"}
+	case "rate":
+		return []string{"hotel:rate:"}
+	case "recommendation":
+		return []string{"hotel:recommendation:"}
+	case "user":
+		return []string{"hotel:user:"}
+	case "reservation":
+		return []string{
+			"hotel:reservation:capacity:",
+			"hotel:reservation:count:",
+			"hotel:reservation:record:",
+		}
+	default:
+		return nil
 	}
+}
+
+func hotelLoadStateByPrefixes(ctx context.Context, client *redis.Client, prefixes []string) (map[string]string, error) {
+	state := make(map[string]string)
+	for _, prefix := range prefixes {
+		var cursor uint64
+		for {
+			keys, next, err := client.Scan(ctx, cursor, prefix+"*", 128).Result()
+			if err != nil {
+				return nil, err
+			}
+			if len(keys) > 0 {
+				values, err := client.MGet(ctx, keys...).Result()
+				if err != nil {
+					return nil, err
+				}
+				for idx, key := range keys {
+					if idx >= len(values) || values[idx] == nil {
+						continue
+					}
+					state[key] = fmt.Sprint(values[idx])
+				}
+			}
+			if next == 0 {
+				break
+			}
+			cursor = next
+		}
+	}
+	return state, nil
+}
+
+func hotelSeedMissingState(ctx context.Context, client *redis.Client, seed map[string]string) error {
+	if len(seed) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(seed))
+	for key := range seed {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	pipe := client.Pipeline()
+	for _, key := range keys {
+		pipe.SetNX(ctx, key, seed[key], 0)
+	}
+	_, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		return err
+	}
+	return nil
 }

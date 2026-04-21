@@ -25,8 +25,7 @@ func InitState(e *exec.Exec) map[string]string {
 	default:
 		state = map[string]string{}
 	}
-	hotelPersistStateSeed(e, state)
-	return state
+	return hotelLoadOrSeedState(e, serviceName, state)
 }
 
 func initHotelGeoState(e *exec.Exec) map[string]string {

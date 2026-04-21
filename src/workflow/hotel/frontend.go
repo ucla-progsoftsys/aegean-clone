@@ -18,10 +18,10 @@ const (
 
 var (
 	hotelSearchTargets         = []string{"node4", "node5", "node6"}
-	hotelProfileTargets        = []string{"node13", "node14", "node15"}
-	hotelRecommendationTargets = []string{"node16", "node17", "node18"}
-	hotelUserTargets           = []string{"node4", "node5", "node6"}
-	hotelReservationTargets    = []string{"node7", "node8", "node9"}
+	hotelReservationTargets    = []string{"node13", "node14", "node15"}
+	hotelProfileTargets        = []string{"node16", "node17", "node18"}
+	hotelRecommendationTargets = []string{"node19", "node20", "node21"}
+	hotelUserTargets           = []string{"node22", "node23", "node24"}
 )
 
 func ExecuteRequestFrontend(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
@@ -52,20 +52,21 @@ func executeFrontendSearch(e *exec.Exec, request map[string]any, stage string, n
 
 	switch stage {
 	case "":
-		if errResponse := validateFrontendSearchPayload(requestID, payload); errResponse != nil {
+		normalizedPayload := normalizeFrontendSearchPayload(payload)
+		if errResponse := validateFrontendSearchPayload(requestID, normalizedPayload); errResponse != nil {
 			return errResponse
 		}
-		if !e.SetRequestContextValue(requestID, frontendPayloadContextKey, payload) {
+		if !e.SetRequestContextValue(requestID, frontendPayloadContextKey, normalizedPayload) {
 			return hotelErrorResponse(requestID, "failed to initialize frontend search context")
 		}
 		if !e.SetRequestContextValue(requestID, frontendStageContextKey, frontendStageAwaitSearch) {
 			return hotelErrorResponse(requestID, "failed to set frontend search stage")
 		}
 		searchRequest := hotelNewNestedRequest(requestID, "search", ndTimestamp, "search_nearby", map[string]any{
-			"lat":      payload["lat"],
-			"lon":      payload["lon"],
-			"in_date":  payload["in_date"],
-			"out_date": payload["out_date"],
+			"lat":      normalizedPayload["lat"],
+			"lon":      normalizedPayload["lon"],
+			"in_date":  normalizedPayload["in_date"],
+			"out_date": normalizedPayload["out_date"],
 		})
 		hotelDispatchNestedRequest(e.Name, e.RunConfig, request, hotelSearchTargets, searchRequest)
 		return hotelBlockedForNestedResponse(requestID)
@@ -152,19 +153,20 @@ func executeFrontendRecommendation(e *exec.Exec, request map[string]any, stage s
 
 	switch stage {
 	case "":
-		if errResponse := validateFrontendRecommendationPayload(requestID, payload); errResponse != nil {
+		normalizedPayload := normalizeFrontendRecommendationPayload(payload)
+		if errResponse := validateFrontendRecommendationPayload(requestID, normalizedPayload); errResponse != nil {
 			return errResponse
 		}
-		if !e.SetRequestContextValue(requestID, frontendPayloadContextKey, payload) {
+		if !e.SetRequestContextValue(requestID, frontendPayloadContextKey, normalizedPayload) {
 			return hotelErrorResponse(requestID, "failed to initialize frontend recommendation context")
 		}
 		if !e.SetRequestContextValue(requestID, frontendStageContextKey, frontendStageAwaitRecommendation) {
 			return hotelErrorResponse(requestID, "failed to set frontend recommendation stage")
 		}
 		recommendationRequest := hotelNewNestedRequest(requestID, "recommendation", ndTimestamp, "get_recommendations", map[string]any{
-			"require": payload["require"],
-			"lat":     payload["lat"],
-			"lon":     payload["lon"],
+			"require": normalizedPayload["require"],
+			"lat":     normalizedPayload["lat"],
+			"lon":     normalizedPayload["lon"],
 		})
 		hotelDispatchNestedRequest(e.Name, e.RunConfig, request, hotelRecommendationTargets, recommendationRequest)
 		return hotelBlockedForNestedResponse(requestID)
@@ -349,6 +351,9 @@ func validateFrontendSearchPayload(requestID any, payload map[string]any) map[st
 	if hotelPayloadString(payload, "in_date") == "" || hotelPayloadString(payload, "out_date") == "" {
 		return hotelErrorResponse(requestID, "missing in_date or out_date")
 	}
+	if _, ok := hotelMustDateRange(hotelPayloadString(payload, "in_date"), hotelPayloadString(payload, "out_date")); !ok {
+		return hotelErrorResponse(requestID, "invalid date range")
+	}
 	if roomNumber, ok := hotelPayloadInt(payload, "room_number"); ok && roomNumber <= 0 {
 		return hotelErrorResponse(requestID, "room_number must be positive")
 	}
@@ -397,4 +402,31 @@ func validateFrontendReservationPayload(requestID any, payload map[string]any) m
 		return hotelErrorResponse(requestID, "invalid date range")
 	}
 	return nil
+}
+
+func normalizeFrontendSearchPayload(payload map[string]any) map[string]any {
+	normalized := copyHotelPayload(payload)
+	if _, ok := hotelPayloadInt(normalized, "room_number"); !ok {
+		normalized["room_number"] = 1
+	}
+	if hotelPayloadString(normalized, "locale") == "" {
+		normalized["locale"] = "en"
+	}
+	return normalized
+}
+
+func normalizeFrontendRecommendationPayload(payload map[string]any) map[string]any {
+	normalized := copyHotelPayload(payload)
+	if hotelPayloadString(normalized, "locale") == "" {
+		normalized["locale"] = "en"
+	}
+	return normalized
+}
+
+func copyHotelPayload(payload map[string]any) map[string]any {
+	duplicated := make(map[string]any, len(payload))
+	for key, value := range payload {
+		duplicated[key] = value
+	}
+	return duplicated
 }

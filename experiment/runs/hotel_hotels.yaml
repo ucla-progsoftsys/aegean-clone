@@ -1,11 +1,11 @@
 ---
-architecture: hotel_reservation.yaml
+architecture: hotel_hotels.yaml
 
 # k6 config
 duration: 15s
 k6_vus: 50
 
-# Hotel /reservation path config
+# Hotel /hotels path config
 hotel_hotel_count: 80
 hotel_user_count: 501
 hotel_search_radius_km: 10.0
