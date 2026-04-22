@@ -11,6 +11,33 @@ import (
 	netx "aegean/net"
 )
 
+type fakeNestedEO struct {
+	primary   bool
+	leader    string
+	proposals []map[string]any
+	mu        sync.Mutex
+}
+
+func (f *fakeNestedEO) IsPrimary() bool {
+	return f.primary
+}
+
+func (f *fakeNestedEO) Primary() (string, bool) {
+	if f.leader == "" {
+		return "", false
+	}
+	return f.leader, true
+}
+
+func (f *fakeNestedEO) ProposeResponsePayload(requestID string, payload map[string]any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	duplicated := cloneMapAny(payload)
+	duplicated["request_id"] = requestID
+	f.proposals = append(f.proposals, duplicated)
+	return nil
+}
+
 type testServer struct {
 	listener net.Listener
 	received chan map[string]any
@@ -116,6 +143,12 @@ func requiredExecRunConfig() map[string]any {
 	}
 }
 
+func requiredExecRunConfigWithEO() map[string]any {
+	config := requiredExecRunConfig()
+	config["nested_use_eo"] = true
+	return config
+}
+
 func TestExecRunConfigOverrides(t *testing.T) {
 	verifierCh := make(chan map[string]any, 64)
 	shimCh := make(chan map[string]any, 64)
@@ -129,6 +162,102 @@ func TestExecRunConfigOverrides(t *testing.T) {
 	}
 	if exec.scheduler.parallelWindowK != 6 {
 		t.Fatalf("expected parallelWindowK 6, got %d", exec.scheduler.parallelWindowK)
+	}
+}
+
+func TestExecDispatchNestedRequestEOOnlyPrimarySends(t *testing.T) {
+	server := startTestServer(t, nil)
+	defer server.close()
+
+	verifierCh := make(chan map[string]any, 64)
+	shimCh := make(chan map[string]any, 64)
+	leaderExec := NewExec("node1", []string{"node1"}, nil, verifierCh, shimCh, 1, testExecuteRequest, nil, requiredExecRunConfigWithEO())
+	followerExec := NewExec("node2", []string{"node2"}, nil, verifierCh, shimCh, 1, testExecuteRequest, nil, requiredExecRunConfigWithEO())
+
+	leaderExec.SetNestedEO(&fakeNestedEO{primary: true, leader: "node1"})
+	followerExec.SetNestedEO(&fakeNestedEO{primary: false, leader: "node1"})
+
+	request := map[string]any{"request_id": "parent"}
+	outgoing := map[string]any{
+		"type":              "request",
+		"request_id":        "parent/child",
+		"parent_request_id": "parent",
+		"timestamp":         123.0,
+		"op":                "default",
+		"op_payload":        map[string]any{},
+	}
+
+	leaderExec.DispatchNestedRequestEO(request, []string{"127.0.0.1"}, outgoing)
+	msg := expectMessage(t, server.received, "request")
+	if msg["request_id"] != "parent/child" {
+		t.Fatalf("expected leader dispatch request_id parent/child, got %v", msg["request_id"])
+	}
+
+	followerExec.DispatchNestedRequestEO(request, []string{"127.0.0.1"}, outgoing)
+	select {
+	case unexpected := <-server.received:
+		t.Fatalf("expected follower not to dispatch, got %v", unexpected)
+	case <-time.After(150 * time.Millisecond):
+	}
+}
+
+func TestExecHandleNestedResponseMessageEOProposesAndApplies(t *testing.T) {
+	exec, _, _ := newTestExec("node1", []string{"node1"}, nil)
+	exec.RunConfig["nested_use_eo"] = true
+	fakeEO := &fakeNestedEO{primary: false, leader: "node1"}
+	exec.SetNestedEO(fakeEO)
+
+	request := map[string]any{"request_id": "parent"}
+	outgoing := map[string]any{
+		"type":              "request",
+		"request_id":        "parent/child",
+		"parent_request_id": "parent",
+		"timestamp":         456.0,
+		"op":                "default",
+		"op_payload":        map[string]any{},
+	}
+	exec.DispatchNestedRequestEO(request, []string{"unreachable.invalid"}, outgoing)
+	fakeEO.primary = true
+
+	responsePayload := map[string]any{
+		"type":              "response",
+		"request_id":        "parent/child",
+		"parent_request_id": "parent",
+		"sender":            "node4",
+		"response":          map[string]any{"status": "ok", "value": "payload"},
+	}
+	response, handled := exec.HandleNestedResponseMessage(responsePayload)
+	if !handled {
+		t.Fatalf("expected EO response to be handled")
+	}
+	if response["status"] != "eo_nested_response_proposed" {
+		t.Fatalf("expected eo_nested_response_proposed, got %v", response["status"])
+	}
+	if len(fakeEO.proposals) != 1 {
+		t.Fatalf("expected one EO proposal, got %d", len(fakeEO.proposals))
+	}
+	if aggregated, _ := fakeEO.proposals[0]["shim_quorum_aggregated"].(bool); !aggregated {
+		t.Fatalf("expected shim_quorum_aggregated=true on proposal payload")
+	}
+
+	if !exec.BufferExactOnceNestedResponse(fakeEO.proposals[0]) {
+		t.Fatalf("expected committed EO response to buffer")
+	}
+
+	nestedResponses, ok := exec.GetNestedResponses("parent")
+	if !ok || len(nestedResponses) != 1 {
+		t.Fatalf("expected one buffered nested response, got %v", nestedResponses)
+	}
+	if nestedResponses[0]["request_id"] != "parent/child" {
+		t.Fatalf("expected buffered request_id parent/child, got %v", nestedResponses[0]["request_id"])
+	}
+
+	ignored, handled := exec.HandleNestedResponseMessage(responsePayload)
+	if !handled {
+		t.Fatalf("expected completed EO response to be swallowed")
+	}
+	if ignored["status"] != "eo_nested_response_ignored" {
+		t.Fatalf("expected eo_nested_response_ignored, got %v", ignored["status"])
 	}
 }
 

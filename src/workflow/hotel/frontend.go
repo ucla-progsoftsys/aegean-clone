@@ -68,7 +68,7 @@ func executeFrontendSearch(e *exec.Exec, request map[string]any, stage string, n
 			"in_date":  normalizedPayload["in_date"],
 			"out_date": normalizedPayload["out_date"],
 		})
-		hotelDispatchNestedRequest(e.Name, e.RunConfig, request, hotelSearchTargets, searchRequest)
+		hotelDispatchNestedRequest(e, request, hotelSearchTargets, searchRequest)
 		return hotelBlockedForNestedResponse(requestID)
 
 	case frontendStageAwaitSearch:
@@ -98,7 +98,7 @@ func executeFrontendSearch(e *exec.Exec, request map[string]any, stage string, n
 			"out_date":    contextPayload["out_date"],
 			"room_number": contextPayload["room_number"],
 		})
-		hotelDispatchNestedRequest(e.Name, e.RunConfig, request, hotelReservationTargets, reservationRequest)
+		hotelDispatchNestedRequest(e, request, hotelReservationTargets, reservationRequest)
 		return hotelBlockedForNestedResponse(requestID)
 
 	case frontendStageAwaitAvailability:
@@ -126,7 +126,7 @@ func executeFrontendSearch(e *exec.Exec, request map[string]any, stage string, n
 			"hotel_ids": hotelIDs,
 			"locale":    contextPayload["locale"],
 		})
-		hotelDispatchNestedRequest(e.Name, e.RunConfig, request, hotelProfileTargets, profileRequest)
+		hotelDispatchNestedRequest(e, request, hotelProfileTargets, profileRequest)
 		return hotelBlockedForNestedResponse(requestID)
 
 	case frontendStageAwaitSearchProfiles:
@@ -168,7 +168,7 @@ func executeFrontendRecommendation(e *exec.Exec, request map[string]any, stage s
 			"lat":     normalizedPayload["lat"],
 			"lon":     normalizedPayload["lon"],
 		})
-		hotelDispatchNestedRequest(e.Name, e.RunConfig, request, hotelRecommendationTargets, recommendationRequest)
+		hotelDispatchNestedRequest(e, request, hotelRecommendationTargets, recommendationRequest)
 		return hotelBlockedForNestedResponse(requestID)
 
 	case frontendStageAwaitRecommendation:
@@ -196,7 +196,7 @@ func executeFrontendRecommendation(e *exec.Exec, request map[string]any, stage s
 			"hotel_ids": hotelIDs,
 			"locale":    contextPayload["locale"],
 		})
-		hotelDispatchNestedRequest(e.Name, e.RunConfig, request, hotelProfileTargets, profileRequest)
+		hotelDispatchNestedRequest(e, request, hotelProfileTargets, profileRequest)
 		return hotelBlockedForNestedResponse(requestID)
 
 	case frontendStageAwaitRecommendationProfiles:
@@ -230,7 +230,7 @@ func executeFrontendCheckUser(e *exec.Exec, request map[string]any, stage string
 			return hotelErrorResponse(requestID, "failed to set frontend user stage")
 		}
 		userRequest := hotelNewNestedRequest(requestID, "user", ndTimestamp, "check_user", payload)
-		hotelDispatchNestedRequest(e.Name, e.RunConfig, request, hotelUserTargets, userRequest)
+		hotelDispatchNestedRequest(e, request, hotelUserTargets, userRequest)
 		return hotelBlockedForNestedResponse(requestID)
 
 	case frontendStageAwaitUserCheck:
@@ -283,7 +283,7 @@ func executeFrontendReservation(e *exec.Exec, request map[string]any, stage stri
 			"username": payload["username"],
 			"password": payload["password"],
 		})
-		hotelDispatchNestedRequest(e.Name, e.RunConfig, request, hotelUserTargets, userRequest)
+		hotelDispatchNestedRequest(e, request, hotelUserTargets, userRequest)
 		return hotelBlockedForNestedResponse(requestID)
 
 	case frontendStageAwaitReservationUser:
@@ -308,7 +308,7 @@ func executeFrontendReservation(e *exec.Exec, request map[string]any, stage stri
 			"customer_name": contextPayload["customer_name"],
 			"room_number":   contextPayload["room_number"],
 		})
-		hotelDispatchNestedRequest(e.Name, e.RunConfig, request, hotelReservationTargets, reservationRequest)
+		hotelDispatchNestedRequest(e, request, hotelReservationTargets, reservationRequest)
 		return hotelBlockedForNestedResponse(requestID)
 
 	case frontendStageAwaitReservationWrite:

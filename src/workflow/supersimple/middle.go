@@ -3,7 +3,6 @@ package supersimpleworkflow
 import (
 	"aegean/common"
 	"aegean/components/exec"
-	netx "aegean/net"
 	"math/rand/v2"
 )
 
@@ -91,17 +90,14 @@ func dispatchNestedRequest(e *exec.Exec, request map[string]any) {
 	forward_prob := common.MustFloat64(e.RunConfig, "supersimple_forward_prob")
 	requestID := request["request_id"]
 	for _, target := range supersimpleBackendTargets {
-		outgoing := map[string]any{
-			"type":       "request",
-			"request_id": requestID,
-			"timestamp":  request["timestamp"],
-			"sender":     e.Name,
-			"op":         "default",
-			"op_payload": map[string]any{},
-		}
-
 		if rand.Float64() < forward_prob {
-			_, _ = netx.SendMessage(target, 8000, outgoing)
+			e.DispatchNestedRequestDirect(request, []string{target}, map[string]any{
+				"type":       "request",
+				"request_id": requestID,
+				"timestamp":  request["timestamp"],
+				"op":         "default",
+				"op_payload": map[string]any{},
+			})
 		}
 	}
 }

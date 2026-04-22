@@ -2,10 +2,6 @@ package socialworkflow
 
 import (
 	"aegean/components/exec"
-	netx "aegean/net"
-	"aegean/telemetry"
-	"context"
-	"sort"
 )
 
 const (
@@ -62,7 +58,7 @@ func ExecuteRequestComposePost(e *exec.Exec, request map[string]any, ndSeed int6
 			}
 		}
 
-		dispatchComposeNestedRequests(e.Name, e.RunConfig, request, post, ndTimestamp)
+		dispatchComposeNestedRequests(e, request, post, ndTimestamp)
 		return blockedForNestedResponse(requestID)
 
 	case composeStageAwaitNested:
@@ -113,8 +109,7 @@ func validateComposeRequest(request map[string]any) map[string]any {
 	return nil
 }
 
-func dispatchComposeNestedRequests(sender string, runConfig map[string]any, request map[string]any, post Post, ndTimestamp float64) {
-	ctx := telemetry.ExtractContext(context.Background(), request)
+func dispatchComposeNestedRequests(e *exec.Exec, request map[string]any, post Post, ndTimestamp float64) {
 	parentRequestID := request["request_id"]
 	postIDs := []string{post.PostID}
 
@@ -126,7 +121,6 @@ func dispatchComposeNestedRequests(sender string, runConfig map[string]any, requ
 			"request_id":        nestedRequestID(parentRequestID, "post_storage"),
 			"parent_request_id": parentRequestID,
 			"timestamp":         ndTimestamp,
-			"sender":            sender,
 			"op":                "store_post",
 			"op_payload": map[string]any{
 				"post_id":    post.PostID,
@@ -140,7 +134,6 @@ func dispatchComposeNestedRequests(sender string, runConfig map[string]any, requ
 			"request_id":        nestedRequestID(parentRequestID, "user_timeline"),
 			"parent_request_id": parentRequestID,
 			"timestamp":         ndTimestamp,
-			"sender":            sender,
 			"op":                "write_user_timeline",
 			"op_payload": map[string]any{
 				"user_id":  post.CreatorID,
@@ -152,7 +145,6 @@ func dispatchComposeNestedRequests(sender string, runConfig map[string]any, requ
 			"request_id":        nestedRequestID(parentRequestID, "home_timeline"),
 			"parent_request_id": parentRequestID,
 			"timestamp":         ndTimestamp,
-			"sender":            sender,
 			"op":                "write_home_timeline",
 			"op_payload": map[string]any{
 				"user_id":  post.CreatorID,
@@ -162,19 +154,7 @@ func dispatchComposeNestedRequests(sender string, runConfig map[string]any, requ
 	}
 
 	for _, serviceName := range []string{"post_storage", "user_timeline", "home_timeline"} {
-		serviceTargets := nestedRequestTargets(runConfig, composeNestedTargets[serviceName])
-		sort.Strings(serviceTargets)
-		for _, target := range serviceTargets {
-			outgoing := outgoingByTarget[composeNestedTargets[serviceName][0]]
-			duplicated := make(map[string]any, len(outgoing))
-			for key, value := range outgoing {
-				duplicated[key] = value
-			}
-			telemetry.InjectContext(ctx, duplicated)
-			go func(target string, outgoing map[string]any) {
-				_, _ = netx.SendMessage(target, 8000, outgoing)
-			}(target, duplicated)
-		}
+		socialDispatchNestedRequest(e, request, composeNestedTargets[serviceName], outgoingByTarget[composeNestedTargets[serviceName][0]])
 	}
 }
 

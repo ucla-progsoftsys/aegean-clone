@@ -2,7 +2,6 @@ package reqraceworkflow
 
 import (
 	"aegean/components/exec"
-	netx "aegean/net"
 )
 
 const (
@@ -85,26 +84,16 @@ func blockedForNestedResponse(requestID any) map[string]any {
 
 func dispatchNestedFanout(e *exec.Exec, request map[string]any) {
 	requestID := request["request_id"]
-	sendFanoutRequest := func(target string, outgoing map[string]any) {
-		_, err := netx.SendMessage(target, 8000, outgoing)
-		if err != nil {
-		}
-	}
-
 	groups := [][]string{backend1Targets, backend2Targets, backend3Targets}
 	for _, targets := range groups {
 		for i := 0; i < 2; i++ {
-			for _, target := range targets {
-				outgoing := map[string]any{
-					"type":       "request",
-					"request_id": requestID,
-					"timestamp":  request["timestamp"],
-					"sender":     e.Name,
-					"op":         "default",
-					"op_payload": map[string]any{},
-				}
-				go sendFanoutRequest(target, outgoing)
-			}
+			e.DispatchNestedRequestDirect(request, targets, map[string]any{
+				"type":       "request",
+				"request_id": requestID,
+				"timestamp":  request["timestamp"],
+				"op":         "default",
+				"op_payload": map[string]any{},
+			})
 		}
 	}
 }

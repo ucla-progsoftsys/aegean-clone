@@ -28,7 +28,7 @@ func ExecuteRequestUniqueID(e *exec.Exec, request map[string]any, ndSeed int64, 
 			"review_request_id": reviewRequestID,
 			"review_id":         reviewID,
 		})
-		mediaDispatchNestedRequest(e.Name, e.RunConfig, request, mediaComposeReviewTargets, outgoing)
+		mediaDispatchNestedRequest(e, request, mediaComposeReviewTargets, outgoing)
 		return mediaBlockedForNestedResponse(requestID)
 	case mediaUniqueIDStageAwait:
 		return mediaCompleteAfterComposeResponse(e, request)

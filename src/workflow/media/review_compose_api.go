@@ -80,23 +80,23 @@ func dispatchReviewComposeFanout(e *exec.Exec, request map[string]any, payload m
 		"username":          mediaPayloadString(payload, "username"),
 		"password":          mediaPayloadString(payload, "password"),
 	})
-	mediaDispatchNestedRequest(e.Name, e.RunConfig, request, mediaUserTargets, userRequest)
+	mediaDispatchNestedRequest(e, request, mediaUserTargets, userRequest)
 
 	movieIDRequest := mediaNewNestedRequest(requestID, "movie_id", ndTimestamp, "upload_movie_id", map[string]any{
 		"review_request_id": reviewRequestID,
 		"title":             mediaPayloadString(payload, "title"),
 		"rating":            rating,
 	})
-	mediaDispatchNestedRequest(e.Name, e.RunConfig, request, mediaMovieIDTargets, movieIDRequest)
+	mediaDispatchNestedRequest(e, request, mediaMovieIDTargets, movieIDRequest)
 
 	textRequest := mediaNewNestedRequest(requestID, "text", ndTimestamp, "upload_text", map[string]any{
 		"review_request_id": reviewRequestID,
 		"text":              mediaPayloadString(payload, "text"),
 	})
-	mediaDispatchNestedRequest(e.Name, e.RunConfig, request, mediaTextTargets, textRequest)
+	mediaDispatchNestedRequest(e, request, mediaTextTargets, textRequest)
 
 	uniqueIDRequest := mediaNewNestedRequest(requestID, "unique_id", ndTimestamp, "upload_unique_id", map[string]any{
 		"review_request_id": reviewRequestID,
 	})
-	mediaDispatchNestedRequest(e.Name, e.RunConfig, request, mediaUniqueIDTargets, uniqueIDRequest)
+	mediaDispatchNestedRequest(e, request, mediaUniqueIDTargets, uniqueIDRequest)
 }

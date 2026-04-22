@@ -1,11 +1,9 @@
 package aegeanworkflow
 
 import (
+	"aegean/common"
 	"aegean/components/exec"
-	netx "aegean/net"
 	"aegean/telemetry"
-	"context"
-	"sync"
 
 	"go.opentelemetry.io/otel/attribute"
 )
@@ -58,26 +56,18 @@ func executeFanoutBase(e *exec.Exec, request map[string]any, ndSeed int64, ndTim
 		)
 		_ = e.SetRequestContextValue(requestID, fanoutWaitSpanContextKey, waitSpan)
 
-		fanoutTargets := []string{"node4"}
-		ctx := telemetry.ExtractContext(context.Background(), request)
-		var wg sync.WaitGroup
-		for _, target := range fanoutTargets {
-			wg.Add(1)
-			outgoing := map[string]any{
-				"type":       "request",
-				"request_id": requestID,
-				"timestamp":  request["timestamp"],
-				"sender":     e.Name,
-				"op":         request["op"],
-				"op_payload": request["op_payload"],
-			}
-			telemetry.InjectContext(ctx, outgoing)
-			go func(target string, outgoing map[string]any) {
-				defer wg.Done()
-				_, _ = netx.SendMessage(target, 8000, outgoing)
-			}(target, outgoing)
+		nestedRequest := map[string]any{
+			"type":       "request",
+			"request_id": requestID,
+			"timestamp":  request["timestamp"],
+			"op":         request["op"],
+			"op_payload": request["op_payload"],
 		}
-		wg.Wait()
+		if common.BoolOrDefault(e.RunConfig, "aegean_nested_use_eo", false) {
+			e.DispatchNestedRequestEO(request, []string{"node4"}, nestedRequest)
+		} else {
+			e.DispatchNestedRequestDirect(request, []string{"node4"}, nestedRequest)
+		}
 		return blockedForNested(requestID)
 
 	case fanoutStageAwaitNested:

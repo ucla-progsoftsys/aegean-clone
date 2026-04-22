@@ -44,14 +44,14 @@ func ExecuteRequestMovieID(e *exec.Exec, request map[string]any, ndSeed int64, n
 			"review_request_id": reviewRequestID,
 			"movie_id":          movieID,
 		})
-		mediaDispatchNestedRequest(e.Name, e.RunConfig, request, mediaComposeReviewTargets, composeRequest)
+		mediaDispatchNestedRequest(e, request, mediaComposeReviewTargets, composeRequest)
 
 		ratingRequest := mediaNewNestedRequest(requestID, "rating", ndTimestamp, "upload_rating", map[string]any{
 			"review_request_id": reviewRequestID,
 			"movie_id":          movieID,
 			"rating":            rating,
 		})
-		mediaDispatchNestedRequest(e.Name, e.RunConfig, request, mediaRatingTargets, ratingRequest)
+		mediaDispatchNestedRequest(e, request, mediaRatingTargets, ratingRequest)
 		return mediaBlockedForNestedResponse(requestID)
 	case mediaMovieIDStageAwait:
 		nestedResponses, ok := e.GetNestedResponses(requestID)

@@ -2,14 +2,11 @@ package hotelworkflow
 
 import (
 	"aegean/common"
-	netx "aegean/net"
-	"aegean/telemetry"
-	"context"
+	"aegean/components/exec"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -152,22 +149,8 @@ func hotelNestedTargets(runConfig map[string]any, replicas []string) []string {
 	return append([]string{}, replicas...)
 }
 
-func hotelDispatchNestedRequest(sender string, runConfig map[string]any, sourceRequest map[string]any, targets []string, outgoing map[string]any) {
-	ctx := telemetry.ExtractContext(context.Background(), sourceRequest)
-	outgoing["sender"] = sender
-	telemetry.InjectContext(ctx, outgoing)
-
-	serviceTargets := hotelNestedTargets(runConfig, targets)
-	sort.Strings(serviceTargets)
-	for _, target := range serviceTargets {
-		duplicated := make(map[string]any, len(outgoing))
-		for key, value := range outgoing {
-			duplicated[key] = value
-		}
-		go func(target string, outgoing map[string]any) {
-			_, _ = netx.SendMessage(target, 8000, outgoing)
-		}(target, duplicated)
-	}
+func hotelDispatchNestedRequest(e *exec.Exec, sourceRequest map[string]any, targets []string, outgoing map[string]any) {
+	e.DispatchNestedRequestDirect(sourceRequest, hotelNestedTargets(e.RunConfig, targets), outgoing)
 }
 
 func hotelNewNestedRequest(parentRequestID any, childName string, ndTimestamp float64, op string, opPayload map[string]any) map[string]any {

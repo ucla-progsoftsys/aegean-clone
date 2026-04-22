@@ -33,7 +33,7 @@ func ExecuteRequestText(e *exec.Exec, request map[string]any, ndSeed int64, ndTi
 			"review_request_id": reviewRequestID,
 			"text":              text,
 		})
-		mediaDispatchNestedRequest(e.Name, e.RunConfig, request, mediaComposeReviewTargets, outgoing)
+		mediaDispatchNestedRequest(e, request, mediaComposeReviewTargets, outgoing)
 		return mediaBlockedForNestedResponse(requestID)
 	case mediaTextStageAwait:
 		return mediaCompleteAfterComposeResponse(e, request)

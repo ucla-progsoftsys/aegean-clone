@@ -45,7 +45,7 @@ func ExecuteRequestSearch(e *exec.Exec, request map[string]any, ndSeed int64, nd
 			"lat": payload["lat"],
 			"lon": payload["lon"],
 		})
-		hotelDispatchNestedRequest(e.Name, e.RunConfig, request, hotelGeoTargets, geoRequest)
+		hotelDispatchNestedRequest(e, request, hotelGeoTargets, geoRequest)
 		return hotelBlockedForNestedResponse(requestID)
 
 	case searchStageAwaitGeo:
@@ -74,7 +74,7 @@ func ExecuteRequestSearch(e *exec.Exec, request map[string]any, ndSeed int64, nd
 			"in_date":   contextPayload["in_date"],
 			"out_date":  contextPayload["out_date"],
 		})
-		hotelDispatchNestedRequest(e.Name, e.RunConfig, request, hotelRateTargets, rateRequest)
+		hotelDispatchNestedRequest(e, request, hotelRateTargets, rateRequest)
 		return hotelBlockedForNestedResponse(requestID)
 
 	case searchStageAwaitRate:

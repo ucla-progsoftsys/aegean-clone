@@ -176,19 +176,19 @@ func dispatchComposedReviewWrites(e *exec.Exec, request map[string]any, review M
 	reviewStorageRequest := mediaNewNestedRequest(requestID, "review_storage", ndTimestamp, "store_review", map[string]any{
 		"review": reviewPayload,
 	})
-	mediaDispatchNestedRequest(e.Name, e.RunConfig, request, mediaReviewStorageTargets, reviewStorageRequest)
+	mediaDispatchNestedRequest(e, request, mediaReviewStorageTargets, reviewStorageRequest)
 
 	userReviewRequest := mediaNewNestedRequest(requestID, "user_review", ndTimestamp, "upload_user_review", map[string]any{
 		"user_id":   review.UserID,
 		"review_id": review.ReviewID,
 		"timestamp": review.Timestamp,
 	})
-	mediaDispatchNestedRequest(e.Name, e.RunConfig, request, mediaUserReviewTargets, userReviewRequest)
+	mediaDispatchNestedRequest(e, request, mediaUserReviewTargets, userReviewRequest)
 
 	movieReviewRequest := mediaNewNestedRequest(requestID, "movie_review", ndTimestamp, "upload_movie_review", map[string]any{
 		"movie_id":  review.MovieID,
 		"review_id": review.ReviewID,
 		"timestamp": review.Timestamp,
 	})
-	mediaDispatchNestedRequest(e.Name, e.RunConfig, request, mediaMovieReviewTargets, movieReviewRequest)
+	mediaDispatchNestedRequest(e, request, mediaMovieReviewTargets, movieReviewRequest)
 }

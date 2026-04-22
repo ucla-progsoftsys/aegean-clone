@@ -28,9 +28,6 @@ func NewEO(cfg Config) (*EO, error) {
 	if len(cfg.Peers) == 0 {
 		return nil, fmt.Errorf("eo requires at least one peer")
 	}
-	if cfg.Execute == nil {
-		return nil, fmt.Errorf("eo requires an execute callback")
-	}
 	factory := cfg.BoxFactory
 	if factory == nil {
 		if cfg.SendRaft == nil {
@@ -83,6 +80,16 @@ func (e *EO) Stop() {
 	}
 }
 
+func (e *EO) ProposeResponsePayload(requestID string, payload map[string]any) error {
+	if requestID == "" {
+		return fmt.Errorf("eo propose requires a request_id")
+	}
+	return e.box.Propose(Entry{
+		RequestID: requestID,
+		Response:  cloneMap(payload),
+	})
+}
+
 func (e *EO) HandleMessage(payload map[string]any) map[string]any {
 	if common.GetString(payload, "type") == MessageTypeRaft {
 		return e.HandleRaftMessage(payload)
@@ -101,6 +108,14 @@ func (e *EO) HandleRequestMessage(payload map[string]any) map[string]any {
 func (e *EO) HandleRequest(requestID string, request map[string]any) map[string]any {
 	requestCopy := cloneMap(request)
 	requestCopy["request_id"] = requestID
+
+	if e.execute == nil {
+		return map[string]any{
+			"status":     "execution_error",
+			"request_id": requestID,
+			"error":      "eo execute callback is not configured",
+		}
+	}
 
 	if !e.box.IsPrimary() {
 		primary, ok := e.box.Primary()

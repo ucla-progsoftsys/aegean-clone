@@ -2,6 +2,7 @@ package socialworkflow
 
 import (
 	"aegean/common"
+	"aegean/components/exec"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -41,6 +42,10 @@ func nestedRequestTargets(runConfig map[string]any, replicas []string) []string 
 		return []string{replicas[0]}
 	}
 	return append([]string{}, replicas...)
+}
+
+func socialDispatchNestedRequest(e *exec.Exec, sourceRequest map[string]any, targets []string, outgoing map[string]any) {
+	e.DispatchNestedRequestDirect(sourceRequest, nestedRequestTargets(e.RunConfig, targets), outgoing)
 }
 
 func deterministicTimestamp(ndTimestamp float64) int64 {

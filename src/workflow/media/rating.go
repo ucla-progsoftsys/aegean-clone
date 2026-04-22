@@ -46,7 +46,7 @@ func ExecuteRequestRating(e *exec.Exec, request map[string]any, ndSeed int64, nd
 			"review_request_id": reviewRequestID,
 			"rating":            rating,
 		})
-		mediaDispatchNestedRequest(e.Name, e.RunConfig, request, mediaComposeReviewTargets, outgoing)
+		mediaDispatchNestedRequest(e, request, mediaComposeReviewTargets, outgoing)
 		return mediaBlockedForNestedResponse(requestID)
 	case mediaRatingStageAwait:
 		return mediaCompleteAfterComposeResponse(e, request)

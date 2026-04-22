@@ -94,6 +94,7 @@ type Exec struct {
 	// Local component channels
 	VerifierCh chan<- map[string]any
 	ShimCh     chan<- map[string]any
+	nestedEO   NestedEOReplicator
 	// mu protects protocol/control-plane fields:
 	// stableState, pendingExecResults, forceSequential, view, checkpoints,
 	// verify-response quorum/timers/maps, nextBatchSeq, nextVerifySeq
@@ -130,16 +131,17 @@ type Exec struct {
 	verifyResponseTimeout time.Duration
 	verifyResponseTimers  map[int]*time.Timer
 	// Out-of-order buffers
-	batchBuffer    *common.OOOBuffer[map[string]any]
-	verifyBuffer   *common.MultiOOOBuffer[map[string]any]
-	nextBatchSeq   int
-	nextVerifySeq  int
-	batchExecuting bool
-	workerCount    int
-	scheduler      *execScheduler
-	batchCtx       *batchMerkleContext
-	batchExecCh    chan batchExecutionTask
-	coordStats     coordinatorStats
+	batchBuffer           *common.OOOBuffer[map[string]any]
+	verifyBuffer          *common.MultiOOOBuffer[map[string]any]
+	nextBatchSeq          int
+	nextVerifySeq         int
+	batchExecuting        bool
+	workerCount           int
+	scheduler             *execScheduler
+	batchCtx              *batchMerkleContext
+	batchExecCh           chan batchExecutionTask
+	coordStats            coordinatorStats
+	nestedDispatchTracker *nestedDispatchTracker
 	// Request execution hook
 	ExecuteRequest ExecuteRequestFunc
 }
@@ -202,6 +204,7 @@ func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- 
 		batchExecCh:           make(chan batchExecutionTask, 1),
 		workerCount:           common.MustInt(initialRunConfig, "worker_count"),
 		coordStats:            coordinatorStats{windowStart: time.Now()},
+		nestedDispatchTracker: newNestedDispatchTracker(),
 	}
 	exec.verifyResponseQuorum = common.NewQuorumHelper(verifyResponseQuorumSize)
 	exec.storeCheckpoint(0, stable.PrevHash, stable.KVStore, stable.MerkleRoot)

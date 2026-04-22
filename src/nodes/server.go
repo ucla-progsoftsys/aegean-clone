@@ -3,13 +3,17 @@ package nodes
 import (
 	"aegean/common"
 	"aegean/components/batcher"
+	"aegean/components/eo"
 	"aegean/components/exec"
 	"aegean/components/mixer"
 	"aegean/components/shim"
 	"aegean/components/verifier"
+	netx "aegean/net"
 	"math/rand/v2"
 	"runtime"
 	"time"
+
+	raftpb "go.etcd.io/raft/v3/raftpb"
 )
 
 const (
@@ -24,6 +28,7 @@ type Server struct {
 	Batcher          *batcher.Batcher
 	Mixer            *mixer.Mixer
 	Exec             *exec.Exec
+	EO               *eo.EO
 	Verifier         *verifier.Verifier
 	isPrimaryBatcher bool
 
@@ -73,6 +78,31 @@ func NewServer(name, host string, port int, clients []string, nodes []string, is
 	server.Mixer = mixer.NewMixer(name, mixerToExec, runConfig)
 	server.Exec = exec.NewExec(name, nodes, peers, execToVerifier, execToShim, verifyResponseQuorumSize, executeRequest, initStateFn, runConfig)
 	server.Verifier = verifier.NewVerifier(name, nodes, nodes, verifierToExec, execVerifyQuorumSize, phaseQuorumSize, expectedExecVotes)
+	if common.BoolOrDefault(runConfig, "nested_use_eo", false) {
+		component, err := eo.NewEO(eo.Config{
+			Name:  name,
+			Peers: nodes,
+			Apply: func(entry eo.AppliedEntry) {
+				_ = server.Exec.BufferExactOnceNestedResponse(entry.Entry.Response)
+			},
+			SendRaft: func(peer string, message raftpb.Message) error {
+				payload, err := eo.EncodeRaftMessage(message)
+				if err != nil {
+					return err
+				}
+				_, err = netx.SendMessage(peer, 8000, payload)
+				return err
+			},
+			TickInterval:  time.Duration(common.IntOrDefault(runConfig, "eo_tick_interval_ms", 10)) * time.Millisecond,
+			ElectionTick:  common.IntOrDefault(runConfig, "eo_election_tick", 10),
+			HeartbeatTick: common.IntOrDefault(runConfig, "eo_heartbeat_tick", 1),
+		})
+		if err != nil {
+			panic(err)
+		}
+		server.EO = component
+		server.Exec.SetNestedEO(component)
+	}
 
 	server.Node.HandleMessage = server.HandleMessage
 	server.Node.HandleReady = server.HandleReady
@@ -163,7 +193,15 @@ func (s *Server) HandleMessage(payload map[string]any) map[string]any {
 	}
 	switch msgType {
 	case "response":
+		if response, handled := s.Exec.HandleNestedResponseMessage(payload); handled {
+			return response
+		}
 		return s.Shim.HandleIncomingResponse(payload)
+	case eo.MessageTypeRaft:
+		if s.EO == nil {
+			return map[string]any{"status": "error", "error": "eo not configured"}
+		}
+		return s.EO.HandleRaftMessage(payload)
 	case "batch":
 		return s.Mixer.HandleBatchMessage(payload)
 	case "verify":
@@ -187,6 +225,6 @@ func (s *Server) HandleMessage(payload map[string]any) map[string]any {
 
 func (s *Server) HandleReady(payload map[string]any) map[string]any {
 	return map[string]any{
-		"ready": true,
+		"ready": s.Exec.NestedEOReady(),
 	}
 }

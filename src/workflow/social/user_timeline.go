@@ -2,9 +2,6 @@ package socialworkflow
 
 import (
 	"aegean/components/exec"
-	netx "aegean/net"
-	"aegean/telemetry"
-	"context"
 )
 
 const (
@@ -67,23 +64,12 @@ func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int
 				"request_id":        nestedRequestID(requestID, "post_storage"),
 				"parent_request_id": requestID,
 				"timestamp":         ndTimestamp,
-				"sender":            e.Name,
 				"op":                "ro_read_posts",
 				"op_payload": map[string]any{
 					"post_ids": postIDs,
 				},
 			}
-			ctx := telemetry.ExtractContext(context.Background(), request)
-			telemetry.InjectContext(ctx, outgoing)
-			for _, target := range nestedRequestTargets(e.RunConfig, userTimelinePostStorageTargets) {
-				duplicated := make(map[string]any, len(outgoing))
-				for key, value := range outgoing {
-					duplicated[key] = value
-				}
-				go func(target string, outgoing map[string]any) {
-					_, _ = netx.SendMessage(target, 8000, outgoing)
-				}(target, duplicated)
-			}
+			socialDispatchNestedRequest(e, request, userTimelinePostStorageTargets, outgoing)
 			return blockedForNestedResponse(requestID)
 
 		case userTimelineStageAwaitPosts:
