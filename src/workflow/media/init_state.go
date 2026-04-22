@@ -19,8 +19,19 @@ func InitState(e *exec.Exec) map[string]string {
 	default:
 		state = map[string]string{}
 	}
-	mediaPersistStateSeed(e, state)
+	if mediaServiceHasPersistentState(serviceName) {
+		mediaPersistStateSeed(e, state)
+	}
 	return state
+}
+
+func mediaServiceHasPersistentState(serviceName string) bool {
+	switch serviceName {
+	case "movie_id", "rating", "user":
+		return true
+	default:
+		return false
+	}
 }
 
 func initMediaUserState(e *exec.Exec) map[string]string {

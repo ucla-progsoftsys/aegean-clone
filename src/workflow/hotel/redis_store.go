@@ -21,8 +21,8 @@ var (
 )
 
 func hotelRedisEnabled(runConfig map[string]any) bool {
-	if os.Getenv("HOTEL_REDIS_ENABLE") == "1" {
-		return true
+	if enabled, ok := os.LookupEnv("HOTEL_REDIS_ENABLE"); ok {
+		return enabled == "1"
 	}
 	return common.BoolOrDefault(runConfig, "hotel_redis_enable", false)
 }

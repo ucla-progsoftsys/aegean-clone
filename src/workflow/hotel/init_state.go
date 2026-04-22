@@ -25,7 +25,19 @@ func InitState(e *exec.Exec) map[string]string {
 	default:
 		state = map[string]string{}
 	}
+	if !hotelServiceHasPersistentState(serviceName) {
+		return state
+	}
 	return hotelLoadOrSeedState(e, serviceName, state)
+}
+
+func hotelServiceHasPersistentState(serviceName string) bool {
+	switch serviceName {
+	case "geo", "profile", "rate", "recommendation", "reservation", "user":
+		return true
+	default:
+		return false
+	}
 }
 
 func initHotelGeoState(e *exec.Exec) map[string]string {

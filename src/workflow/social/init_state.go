@@ -23,8 +23,19 @@ func InitState(e *exec.Exec) map[string]string {
 	default:
 		state = map[string]string{}
 	}
-	socialPersistStateSeed(state)
+	if socialServiceHasPersistentState(serviceName) {
+		socialPersistStateSeed(state)
+	}
 	return state
+}
+
+func socialServiceHasPersistentState(serviceName string) bool {
+	switch serviceName {
+	case "home_timeline", "post_storage", "social_graph", "user_timeline":
+		return true
+	default:
+		return false
+	}
 }
 
 func initPostStorageState(e *exec.Exec) map[string]string {

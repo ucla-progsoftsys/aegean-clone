@@ -13,14 +13,14 @@ import (
 )
 
 var (
-	mediaRedisOnce   sync.Once
+	mediaRedisMu     sync.Mutex
 	mediaRedisClient *redis.Client
-	mediaRedisErr    error
+	mediaRedisAddrID string
 )
 
 func mediaRedisEnabled(runConfig map[string]any) bool {
-	if os.Getenv("MEDIA_REDIS_ENABLE") == "1" {
-		return true
+	if enabled, ok := os.LookupEnv("MEDIA_REDIS_ENABLE"); ok {
+		return enabled == "1"
 	}
 	return common.BoolOrDefault(runConfig, "media_redis_enable", false)
 }
@@ -45,23 +45,36 @@ func getMediaRedisClient(runConfig map[string]any) (*redis.Client, error) {
 	if !mediaRedisEnabled(runConfig) {
 		return nil, nil
 	}
-	mediaRedisOnce.Do(func() {
-		client := redis.NewClient(&redis.Options{
-			Addr:         mediaRedisAddr(runConfig),
-			DialTimeout:  500 * time.Millisecond,
-			ReadTimeout:  500 * time.Millisecond,
-			WriteTimeout: 500 * time.Millisecond,
-		})
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		if err := client.Ping(ctx).Err(); err != nil {
-			mediaRedisErr = err
-			_ = client.Close()
-			return
-		}
-		mediaRedisClient = client
+	addr := mediaRedisAddr(runConfig)
+
+	mediaRedisMu.Lock()
+	defer mediaRedisMu.Unlock()
+
+	if mediaRedisClient != nil && mediaRedisAddrID == addr {
+		return mediaRedisClient, nil
+	}
+	if mediaRedisClient != nil {
+		_ = mediaRedisClient.Close()
+		mediaRedisClient = nil
+		mediaRedisAddrID = ""
+	}
+
+	client := redis.NewClient(&redis.Options{
+		Addr:         addr,
+		DialTimeout:  500 * time.Millisecond,
+		ReadTimeout:  500 * time.Millisecond,
+		WriteTimeout: 500 * time.Millisecond,
 	})
-	return mediaRedisClient, mediaRedisErr
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		_ = client.Close()
+		return nil, err
+	}
+
+	mediaRedisClient = client
+	mediaRedisAddrID = addr
+	return mediaRedisClient, nil
 }
 
 func mediaReadKV(e *exec.Exec, key string) string {

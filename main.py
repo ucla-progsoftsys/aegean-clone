@@ -27,6 +27,32 @@ DEFAULT_REMOTE_BLOCK_PROFILE_PATH = "/tmp/block.pprof"
 DEFAULT_REMOTE_MUTEX_PROFILE_PATH = "/tmp/mutex.pprof"
 DEFAULT_REMOTE_OTEL_TRACE_PATH = "/tmp/otel-traces.json"
 
+HOTEL_LOCAL_REDIS_SERVICES = {
+    "geo",
+    "profile",
+    "rate",
+    "recommendation",
+    "reservation",
+    "user",
+}
+
+MEDIA_LOCAL_REDIS_SERVICES = {
+    "compose_review",
+    "movie_id",
+    "movie_review",
+    "rating",
+    "review_storage",
+    "user",
+    "user_review",
+}
+
+SOCIAL_LOCAL_REDIS_SERVICES = {
+    "home_timeline",
+    "post_storage",
+    "social_graph",
+    "user_timeline",
+}
+
 
 def resolve_run_config_paths(run_config_path):
     resolved_run_config_path = os.path.abspath(run_config_path)
@@ -80,6 +106,7 @@ def load_experiment_topology(architecture_path):
 
     node_names = sorted(nodes.keys())
     client_names = []
+    node_services = {}
     for node_name, node_cfg in nodes.items():
         service_name = node_cfg.get("service")
         if not service_name:
@@ -90,10 +117,11 @@ def load_experiment_topology(architecture_path):
             raise ValueError(f"node {node_name} references unknown service '{service_name}'")
 
         service_type = service_cfg.get("type")
+        node_services[node_name] = service_name
         if service_type == "client":
             client_names.append(node_name)
 
-    return node_names, sorted(client_names)
+    return node_names, sorted(client_names), node_services
 
 
 def _scp(node_name, remote_path, local_path):
@@ -223,7 +251,35 @@ def build_binary(build_node):
     )
 
 
-def launch_nodes(node_names, config_path, enable_pprof=False, enable_tracing=False):
+def node_local_redis_env(run_config, service_name):
+    env_parts = []
+    needs_local_redis = False
+
+    if "hotel_redis_enable" in run_config:
+        enabled = bool(run_config.get("hotel_redis_enable")) and service_name in HOTEL_LOCAL_REDIS_SERVICES
+        env_parts.append(f"HOTEL_REDIS_ENABLE={'1' if enabled else '0'}")
+        if enabled:
+            env_parts.append("HOTEL_REDIS_ADDR=127.0.0.1:6379")
+            needs_local_redis = True
+
+    if "media_redis_enable" in run_config:
+        enabled = bool(run_config.get("media_redis_enable")) and service_name in MEDIA_LOCAL_REDIS_SERVICES
+        env_parts.append(f"MEDIA_REDIS_ENABLE={'1' if enabled else '0'}")
+        if enabled:
+            env_parts.append("MEDIA_REDIS_ADDR=127.0.0.1:6379")
+            needs_local_redis = True
+
+    if "social_redis_enable" in run_config:
+        enabled = bool(run_config.get("social_redis_enable")) and service_name in SOCIAL_LOCAL_REDIS_SERVICES
+        env_parts.append(f"SOCIAL_REDIS_ENABLE={'1' if enabled else '0'}")
+        if enabled:
+            env_parts.append("SOCIAL_REDIS_ADDR=127.0.0.1:6379")
+            needs_local_redis = True
+
+    return needs_local_redis, " ".join(env_parts)
+
+
+def launch_nodes(node_names, node_services, config_path, run_config, enable_pprof=False, enable_tracing=False):
     logger.info("Launching %d nodes", len(node_names))
     if node_names:
         build_binary(node_names[0])
@@ -235,6 +291,7 @@ def launch_nodes(node_names, config_path, enable_pprof=False, enable_tracing=Fal
     mutex_profile_path = os.environ.get("AEGEAN_MUTEX_PROFILE_PATH", DEFAULT_REMOTE_MUTEX_PROFILE_PATH).strip() or DEFAULT_REMOTE_MUTEX_PROFILE_PATH
     otel_trace_path = os.environ.get("AEGEAN_OTEL_FILE_PATH", DEFAULT_REMOTE_OTEL_TRACE_PATH).strip() or DEFAULT_REMOTE_OTEL_TRACE_PATH
     for name in node_names:
+        service_name = node_services.get(name, "")
         profile_env = ""
         if enable_pprof and name == profiled_node:
             profile_env = (
@@ -247,6 +304,23 @@ def launch_nodes(node_names, config_path, enable_pprof=False, enable_tracing=Fal
             telemetry_env = f"AEGEAN_OTEL_FILE_PATH={shlex.quote(otel_trace_path)} "
         else:
             telemetry_env = "AEGEAN_DISABLE_TRACING=1 "
+        redis_needed, redis_env = node_local_redis_env(run_config, service_name)
+        redis_setup = (
+            "pkill -TERM -x redis-server || true; "
+            "sleep 1; "
+            "pkill -9 -x redis-server || true; "
+        )
+        if redis_needed:
+            redis_data_dir = f"/tmp/aegean-redis-{name}"
+            redis_setup += (
+                f"mkdir -p {shlex.quote(redis_data_dir)} || exit 1; "
+                f"redis-server --bind 127.0.0.1 --port 6379 "
+                f"--dir {shlex.quote(redis_data_dir)} "
+                "--appendonly yes "
+                "--logfile /tmp/redis.log "
+                "--daemonize yes || exit 1; "
+            )
+        redis_env_prefix = (redis_env + " ") if redis_env else ""
         _ssh_shell(
             name,
             (
@@ -254,7 +328,8 @@ def launch_nodes(node_names, config_path, enable_pprof=False, enable_tracing=Fal
                 "cd /app/src || exit 1; "
                 "export GOMODCACHE=/app/.gomodcache; "
                 "export GOCACHE=/tmp/go-build; "
-                f"nohup env {telemetry_env}{profile_env}{shlex.quote(REMOTE_BINARY_PATH)} --name {shlex.quote(name)} "
+                f"{redis_setup}"
+                f"nohup env {telemetry_env}{profile_env}{redis_env_prefix}{shlex.quote(REMOTE_BINARY_PATH)} --name {shlex.quote(name)} "
                 "--host 0.0.0.0 "
                 "--port 8000 "
                 f"--config {remote_config_path} "
@@ -270,9 +345,12 @@ def stop_docker_nodes(node_names):
             (
                 "pkill -TERM -f aegean-node || true; "
                 "pkill -TERM -f 'go run \\.' || true; "
+                "pkill -TERM -x redis-server || true; "
                 "sleep 1; "
                 "pkill -9 -f aegean-node || true; "
                 "pkill -9 -f 'go run \\.' || true"
+                "; "
+                "pkill -9 -x redis-server || true"
             ),
         )
 
@@ -428,14 +506,21 @@ def aggregate_runs(per_run_metrics):
 
 def run_experiment(config_path, enable_pprof=False, enable_tracing=False, timestamped=False):
     _, relative_run_config_path, architecture_path, run_config = load_run_config(config_path)
-    node_names, client_names = load_experiment_topology(architecture_path)
+    node_names, client_names, node_services = load_experiment_topology(architecture_path)
     run_dir = create_results_run_dir(relative_run_config_path, timestamped=timestamped)
     run_timeout_seconds = run_config["run_timeout_seconds"]
 
     logger.info("Experiment starting: %s", relative_run_config_path)
     stop_docker_nodes(node_names)
 
-    launch_nodes(node_names, relative_run_config_path, enable_pprof=enable_pprof, enable_tracing=enable_tracing)
+    launch_nodes(
+        node_names,
+        node_services,
+        relative_run_config_path,
+        run_config,
+        enable_pprof=enable_pprof,
+        enable_tracing=enable_tracing,
+    )
     logger.info("Waiting for all nodes to become ready")
     all_nodes_ready = wait_for_nodes_ready(node_names, timeout=120.0, poll_interval=1.0)
     if not all_nodes_ready:

@@ -12,13 +12,16 @@ import (
 )
 
 var (
-	socialRedisOnce   sync.Once
+	socialRedisMu     sync.Mutex
 	socialRedisClient *redis.Client
-	socialRedisErr    error
+	socialRedisAddrID string
 )
 
 func socialRedisEnabled() bool {
-	return os.Getenv("SOCIAL_REDIS_ENABLE") == "1"
+	if enabled, ok := os.LookupEnv("SOCIAL_REDIS_ENABLE"); ok {
+		return enabled == "1"
+	}
+	return false
 }
 
 func socialRedisAddr() string {
@@ -32,23 +35,36 @@ func getSocialRedisClient() (*redis.Client, error) {
 	if !socialRedisEnabled() {
 		return nil, nil
 	}
-	socialRedisOnce.Do(func() {
-		client := redis.NewClient(&redis.Options{
-			Addr:         socialRedisAddr(),
-			DialTimeout:  500 * time.Millisecond,
-			ReadTimeout:  500 * time.Millisecond,
-			WriteTimeout: 500 * time.Millisecond,
-		})
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		if err := client.Ping(ctx).Err(); err != nil {
-			socialRedisErr = err
-			_ = client.Close()
-			return
-		}
-		socialRedisClient = client
+	addr := socialRedisAddr()
+
+	socialRedisMu.Lock()
+	defer socialRedisMu.Unlock()
+
+	if socialRedisClient != nil && socialRedisAddrID == addr {
+		return socialRedisClient, nil
+	}
+	if socialRedisClient != nil {
+		_ = socialRedisClient.Close()
+		socialRedisClient = nil
+		socialRedisAddrID = ""
+	}
+
+	client := redis.NewClient(&redis.Options{
+		Addr:         addr,
+		DialTimeout:  500 * time.Millisecond,
+		ReadTimeout:  500 * time.Millisecond,
+		WriteTimeout: 500 * time.Millisecond,
 	})
-	return socialRedisClient, socialRedisErr
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		_ = client.Close()
+		return nil, err
+	}
+
+	socialRedisClient = client
+	socialRedisAddrID = addr
+	return socialRedisClient, nil
 }
 
 func socialReadKV(e *exec.Exec, key string) string {

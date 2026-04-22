@@ -19,9 +19,9 @@ eo_tick_interval_ms: 10
 eo_election_tick: 10
 eo_heartbeat_tick: 1
 
-# Redis durable state config. The docker-compose service uses append-only files.
+# Redis durable state config. Redis runs locally inside stateful replica nodes.
 media_redis_enable: true
-media_redis_addr: media-redis:6379
+media_redis_addr: 127.0.0.1:6379
 
 # Run & system configs
 run_timeout_seconds: 30
