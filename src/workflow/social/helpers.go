@@ -45,7 +45,12 @@ func nestedRequestTargets(runConfig map[string]any, replicas []string) []string 
 }
 
 func socialDispatchNestedRequest(e *exec.Exec, sourceRequest map[string]any, targets []string, outgoing map[string]any) {
-	e.DispatchNestedRequestDirect(sourceRequest, nestedRequestTargets(e.RunConfig, targets), outgoing)
+	selectedTargets := nestedRequestTargets(e.RunConfig, targets)
+	if common.BoolOrDefault(e.RunConfig, "social_nested_use_eo", false) {
+		e.DispatchNestedRequestEO(sourceRequest, selectedTargets, outgoing)
+		return
+	}
+	e.DispatchNestedRequestDirect(sourceRequest, selectedTargets, outgoing)
 }
 
 func deterministicTimestamp(ndTimestamp float64) int64 {

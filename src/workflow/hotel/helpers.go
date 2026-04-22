@@ -150,7 +150,12 @@ func hotelNestedTargets(runConfig map[string]any, replicas []string) []string {
 }
 
 func hotelDispatchNestedRequest(e *exec.Exec, sourceRequest map[string]any, targets []string, outgoing map[string]any) {
-	e.DispatchNestedRequestDirect(sourceRequest, hotelNestedTargets(e.RunConfig, targets), outgoing)
+	selectedTargets := hotelNestedTargets(e.RunConfig, targets)
+	if common.BoolOrDefault(e.RunConfig, "hotel_nested_use_eo", false) {
+		e.DispatchNestedRequestEO(sourceRequest, selectedTargets, outgoing)
+		return
+	}
+	e.DispatchNestedRequestDirect(sourceRequest, selectedTargets, outgoing)
 }
 
 func hotelNewNestedRequest(parentRequestID any, childName string, ndTimestamp float64, op string, opPayload map[string]any) map[string]any {

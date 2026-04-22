@@ -1,7 +1,9 @@
 package reqraceworkflow
 
 import (
+	"aegean/common"
 	"aegean/components/exec"
+	"fmt"
 )
 
 const (
@@ -84,7 +86,26 @@ func blockedForNestedResponse(requestID any) map[string]any {
 
 func dispatchNestedFanout(e *exec.Exec, request map[string]any) {
 	requestID := request["request_id"]
-	groups := [][]string{backend1Targets, backend2Targets, backend3Targets}
+	groups := map[string][]string{
+		"backend_1": backend1Targets,
+		"backend_2": backend2Targets,
+		"backend_3": backend3Targets,
+	}
+
+	if common.BoolOrDefault(e.RunConfig, "req_race_nested_use_eo", false) {
+		for groupName, targets := range groups {
+			e.DispatchNestedRequestEO(request, targets, map[string]any{
+				"type":              "request",
+				"request_id":        fmt.Sprintf("%v/%s", requestID, groupName),
+				"parent_request_id": requestID,
+				"timestamp":         request["timestamp"],
+				"op":                "default",
+				"op_payload":        map[string]any{},
+			})
+		}
+		return
+	}
+
 	for _, targets := range groups {
 		for i := 0; i < 2; i++ {
 			e.DispatchNestedRequestDirect(request, targets, map[string]any{

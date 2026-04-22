@@ -11,8 +11,9 @@ func ExecuteRequestBackend2(e *exec.Exec, request map[string]any, ndSeed int64, 
 	_ = ndTimestamp
 
 	return map[string]any{
-		"request_id": request["request_id"],
-		"status":     "ok",
-		"value":      2,
+		"request_id":        request["request_id"],
+		"status":            "ok",
+		"value":             2,
+		"parent_request_id": request["parent_request_id"],
 	}
 }

@@ -116,7 +116,12 @@ func mediaNestedTargets(runConfig map[string]any, replicas []string) []string {
 }
 
 func mediaDispatchNestedRequest(e *exec.Exec, sourceRequest map[string]any, targets []string, outgoing map[string]any) {
-	e.DispatchNestedRequestDirect(sourceRequest, mediaNestedTargets(e.RunConfig, targets), outgoing)
+	selectedTargets := mediaNestedTargets(e.RunConfig, targets)
+	if common.BoolOrDefault(e.RunConfig, "media_nested_use_eo", false) {
+		e.DispatchNestedRequestEO(sourceRequest, selectedTargets, outgoing)
+		return
+	}
+	e.DispatchNestedRequestDirect(sourceRequest, selectedTargets, outgoing)
 }
 
 func mediaNewNestedRequest(parentRequestID any, childName string, ndTimestamp float64, op string, opPayload map[string]any) map[string]any {
