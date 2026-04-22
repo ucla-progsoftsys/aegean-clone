@@ -6,7 +6,7 @@ services:
     - node1
     - node2
     - node3
-    client_workflow: media_k6_closed_review_compose_client
+    client_workflow: media_k6_open_review_compose_client
   review_compose_api:
     type: server
     clients:

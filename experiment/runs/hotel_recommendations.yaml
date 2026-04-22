@@ -1,5 +1,5 @@
 ---
-architecture: hotel_recommendations.yaml
+architecture: hotel_recommendations_closed.yaml
 
 # k6 config
 duration: 15s

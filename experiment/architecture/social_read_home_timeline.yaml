@@ -6,7 +6,7 @@ services:
     - node1
     - node2
     - node3
-    client_workflow: social_k6_closed_read_home_timeline_client
+    client_workflow: social_k6_open_read_home_timeline_client
   home_timeline:
     type: server
     clients:

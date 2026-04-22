@@ -6,7 +6,7 @@ services:
     - node1
     - node2
     - node3
-    client_workflow: hotel_k6_open_hotels_client
+    client_workflow: hotel_k6_closed_client
   frontend:
     type: server
     clients:
@@ -23,8 +23,8 @@ services:
     phaseQuorumSize: 2
     expectedExecVotes: 3
     batcher_config:
-      batch_size: 28
-      batch_timeout_ms: 15
+      batch_size: 32
+      batch_timeout_ms: 20
   search:
     type: server
     clients:
@@ -104,7 +104,7 @@ services:
     expectedExecVotes: 3
     batcher_config:
       batch_size: 10
-      batch_timeout_ms: 3
+      batch_timeout_ms: 4
   profile:
     type: server
     clients:
@@ -163,8 +163,8 @@ services:
     phaseQuorumSize: 2
     expectedExecVotes: 3
     batcher_config:
-      batch_size: 12
-      batch_timeout_ms: 4
+      batch_size: 16
+      batch_timeout_ms: 5
 nodes:
   node0:
     service: client

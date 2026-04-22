@@ -1,5 +1,5 @@
 ---
-architecture: hotel_hotels_big.yaml
+architecture: hotel_recommendations.yaml
 
 # k6 config
 k6_qps: 30
@@ -7,7 +7,7 @@ duration: 15s
 k6_pre_allocated_vus: 0
 k6_max_vus: 10000
 
-# Hotel /hotels path config
+# Hotel recommendation path config
 hotel_hotel_count: 80
 hotel_user_count: 501
 hotel_search_radius_km: 10.0

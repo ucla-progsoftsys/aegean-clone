@@ -1,0 +1,312 @@
+---
+services:
+  client:
+    type: client
+    next:
+    - node1
+    - node2
+    - node3
+    client_workflow: media_k6_closed_review_compose_client
+  review_compose_api:
+    type: server
+    clients:
+    - node0
+    nodes:
+    - node1
+    - node2
+    - node3
+    exec_workflow: media_review_compose_api
+    init_state_workflow: media_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 25
+  user:
+    type: server
+    clients:
+    - node1
+    - node2
+    - node3
+    nodes:
+    - node4
+    - node5
+    - node6
+    exec_workflow: media_user
+    init_state_workflow: media_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 8
+  movie_id:
+    type: server
+    clients:
+    - node1
+    - node2
+    - node3
+    nodes:
+    - node7
+    - node8
+    - node9
+    exec_workflow: media_movie_id
+    init_state_workflow: media_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 8
+  text:
+    type: server
+    clients:
+    - node1
+    - node2
+    - node3
+    nodes:
+    - node10
+    - node11
+    - node12
+    exec_workflow: media_text
+    init_state_workflow: media_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 8
+  unique_id:
+    type: server
+    clients:
+    - node1
+    - node2
+    - node3
+    nodes:
+    - node13
+    - node14
+    - node15
+    exec_workflow: media_unique_id
+    init_state_workflow: media_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 24
+      batch_timeout_ms: 8
+  rating:
+    type: server
+    clients:
+    - node7
+    - node8
+    - node9
+    nodes:
+    - node16
+    - node17
+    - node18
+    exec_workflow: media_rating
+    init_state_workflow: media_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 16
+      batch_timeout_ms: 5
+  compose_review:
+    type: server
+    clients:
+    - node4
+    - node5
+    - node6
+    - node7
+    - node8
+    - node9
+    - node10
+    - node11
+    - node12
+    - node13
+    - node14
+    - node15
+    - node16
+    - node17
+    - node18
+    nodes:
+    - node19
+    - node20
+    - node21
+    exec_workflow: media_compose_review
+    init_state_workflow: media_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 12
+      batch_timeout_ms: 4
+  review_storage:
+    type: server
+    clients:
+    - node19
+    - node20
+    - node21
+    nodes:
+    - node22
+    - node23
+    - node24
+    exec_workflow: media_review_storage
+    init_state_workflow: media_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 12
+      batch_timeout_ms: 4
+  user_review:
+    type: server
+    clients:
+    - node19
+    - node20
+    - node21
+    nodes:
+    - node25
+    - node26
+    - node27
+    exec_workflow: media_user_review
+    init_state_workflow: media_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 12
+      batch_timeout_ms: 4
+  movie_review:
+    type: server
+    clients:
+    - node19
+    - node20
+    - node21
+    nodes:
+    - node28
+    - node29
+    - node30
+    exec_workflow: media_movie_review
+    init_state_workflow: media_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 12
+      batch_timeout_ms: 4
+nodes:
+  node0:
+    service: client
+  node1:
+    service: review_compose_api
+    is_primary_batcher: true
+  node2:
+    service: review_compose_api
+    is_primary_batcher: false
+  node3:
+    service: review_compose_api
+    is_primary_batcher: false
+  node4:
+    service: user
+    is_primary_batcher: true
+  node5:
+    service: user
+    is_primary_batcher: false
+  node6:
+    service: user
+    is_primary_batcher: false
+  node7:
+    service: movie_id
+    is_primary_batcher: true
+  node8:
+    service: movie_id
+    is_primary_batcher: false
+  node9:
+    service: movie_id
+    is_primary_batcher: false
+  node10:
+    service: text
+    is_primary_batcher: true
+  node11:
+    service: text
+    is_primary_batcher: false
+  node12:
+    service: text
+    is_primary_batcher: false
+  node13:
+    service: unique_id
+    is_primary_batcher: true
+  node14:
+    service: unique_id
+    is_primary_batcher: false
+  node15:
+    service: unique_id
+    is_primary_batcher: false
+  node16:
+    service: rating
+    is_primary_batcher: true
+  node17:
+    service: rating
+    is_primary_batcher: false
+  node18:
+    service: rating
+    is_primary_batcher: false
+  node19:
+    service: compose_review
+    is_primary_batcher: true
+  node20:
+    service: compose_review
+    is_primary_batcher: false
+  node21:
+    service: compose_review
+    is_primary_batcher: false
+  node22:
+    service: review_storage
+    is_primary_batcher: true
+  node23:
+    service: review_storage
+    is_primary_batcher: false
+  node24:
+    service: review_storage
+    is_primary_batcher: false
+  node25:
+    service: user_review
+    is_primary_batcher: true
+  node26:
+    service: user_review
+    is_primary_batcher: false
+  node27:
+    service: user_review
+    is_primary_batcher: false
+  node28:
+    service: movie_review
+    is_primary_batcher: true
+  node29:
+    service: movie_review
+    is_primary_batcher: false
+  node30:
+    service: movie_review
+    is_primary_batcher: false

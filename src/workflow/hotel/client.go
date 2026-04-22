@@ -24,6 +24,111 @@ func K6ClosedRecommendationsClientRequestLogic(c *nodes.Client) {
 	runHotelClosedClient(c, "workflow/hotel/k6_closed_recommendations_client.js")
 }
 
+func K6OpenHotelsClientRequestLogic(c *nodes.Client) {
+	duration := common.MustString(c.RunConfig, "duration")
+	runTimeoutSeconds := common.MustInt(c.RunConfig, "run_timeout_seconds")
+	userCount := common.MustInt(c.RunConfig, "hotel_user_count")
+	hotelCount := common.MustInt(c.RunConfig, "hotel_hotel_count")
+	k6QPS := common.MustInt(c.RunConfig, "k6_qps")
+	k6PreAllocatedVUs := common.MustInt(c.RunConfig, "k6_pre_allocated_vus")
+	k6MaxVUs := common.MustInt(c.RunConfig, "k6_max_vus")
+	k6CommandDeadline := time.Duration(runTimeoutSeconds) * time.Second
+
+	c.WaitForNodesReady(c.ReadyNodes)
+	k6TargetURL := fmt.Sprintf("http://%s:8000/", c.Name)
+
+	if err := runHotelK6Open(hotelK6OpenRunConfig{
+		rate:            k6QPS,
+		duration:        duration,
+		preAllocatedVUs: k6PreAllocatedVUs,
+		maxVUs:          k6MaxVUs,
+		targetURL:       k6TargetURL,
+		deadline:        k6CommandDeadline,
+		sender:          c.Name,
+		scriptPath:      "workflow/hotel/k6_open_hotels_client.js",
+		extraEnv: []string{
+			"HOTEL_USER_COUNT=" + strconv.Itoa(userCount),
+			"HOTEL_HOTEL_COUNT=" + strconv.Itoa(hotelCount),
+		},
+	}); err != nil {
+		if err == context.DeadlineExceeded {
+			log.Printf("hotel k6 open hotels client timed out after %s", k6CommandDeadline)
+			return
+		}
+		log.Printf("hotel k6 open hotels client failed: %v", err)
+	}
+}
+
+func K6OpenRecommendationsClientRequestLogic(c *nodes.Client) {
+	duration := common.MustString(c.RunConfig, "duration")
+	runTimeoutSeconds := common.MustInt(c.RunConfig, "run_timeout_seconds")
+	userCount := common.MustInt(c.RunConfig, "hotel_user_count")
+	hotelCount := common.MustInt(c.RunConfig, "hotel_hotel_count")
+	k6QPS := common.MustInt(c.RunConfig, "k6_qps")
+	k6PreAllocatedVUs := common.MustInt(c.RunConfig, "k6_pre_allocated_vus")
+	k6MaxVUs := common.MustInt(c.RunConfig, "k6_max_vus")
+	k6CommandDeadline := time.Duration(runTimeoutSeconds) * time.Second
+
+	c.WaitForNodesReady(c.ReadyNodes)
+	k6TargetURL := fmt.Sprintf("http://%s:8000/", c.Name)
+
+	if err := runHotelK6Open(hotelK6OpenRunConfig{
+		rate:            k6QPS,
+		duration:        duration,
+		preAllocatedVUs: k6PreAllocatedVUs,
+		maxVUs:          k6MaxVUs,
+		targetURL:       k6TargetURL,
+		deadline:        k6CommandDeadline,
+		sender:          c.Name,
+		scriptPath:      "workflow/hotel/k6_open_recommendations_client.js",
+		extraEnv: []string{
+			"HOTEL_USER_COUNT=" + strconv.Itoa(userCount),
+			"HOTEL_HOTEL_COUNT=" + strconv.Itoa(hotelCount),
+		},
+	}); err != nil {
+		if err == context.DeadlineExceeded {
+			log.Printf("hotel k6 open recommendations client timed out after %s", k6CommandDeadline)
+			return
+		}
+		log.Printf("hotel k6 open recommendations client failed: %v", err)
+	}
+}
+
+func K6OpenReservationClientRequestLogic(c *nodes.Client) {
+	duration := common.MustString(c.RunConfig, "duration")
+	runTimeoutSeconds := common.MustInt(c.RunConfig, "run_timeout_seconds")
+	userCount := common.MustInt(c.RunConfig, "hotel_user_count")
+	hotelCount := common.MustInt(c.RunConfig, "hotel_hotel_count")
+	k6QPS := common.MustInt(c.RunConfig, "k6_qps")
+	k6PreAllocatedVUs := common.MustInt(c.RunConfig, "k6_pre_allocated_vus")
+	k6MaxVUs := common.MustInt(c.RunConfig, "k6_max_vus")
+	k6CommandDeadline := time.Duration(runTimeoutSeconds) * time.Second
+
+	c.WaitForNodesReady(c.ReadyNodes)
+	k6TargetURL := fmt.Sprintf("http://%s:8000/", c.Name)
+
+	if err := runHotelK6Open(hotelK6OpenRunConfig{
+		rate:            k6QPS,
+		duration:        duration,
+		preAllocatedVUs: k6PreAllocatedVUs,
+		maxVUs:          k6MaxVUs,
+		targetURL:       k6TargetURL,
+		deadline:        k6CommandDeadline,
+		sender:          c.Name,
+		scriptPath:      "workflow/hotel/k6_open_reservation_client.js",
+		extraEnv: []string{
+			"HOTEL_USER_COUNT=" + strconv.Itoa(userCount),
+			"HOTEL_HOTEL_COUNT=" + strconv.Itoa(hotelCount),
+		},
+	}); err != nil {
+		if err == context.DeadlineExceeded {
+			log.Printf("hotel k6 open reservation client timed out after %s", k6CommandDeadline)
+			return
+		}
+		log.Printf("hotel k6 open reservation client failed: %v", err)
+	}
+}
+
 func runHotelClosedClient(c *nodes.Client, scriptPath string) {
 	duration := common.MustString(c.RunConfig, "duration")
 	runTimeoutSeconds := common.MustInt(c.RunConfig, "run_timeout_seconds")
@@ -64,6 +169,18 @@ type hotelK6RunConfig struct {
 	extraEnv   []string
 }
 
+type hotelK6OpenRunConfig struct {
+	rate            int
+	duration        string
+	preAllocatedVUs int
+	maxVUs          int
+	targetURL       string
+	deadline        time.Duration
+	sender          string
+	scriptPath      string
+	extraEnv        []string
+}
+
 func runHotelK6(config hotelK6RunConfig) error {
 	ctx, cancel := context.WithTimeout(context.Background(), config.deadline)
 	defer cancel()
@@ -73,6 +190,37 @@ func runHotelK6(config hotelK6RunConfig) error {
 		"-e", "TARGET_URL=" + config.targetURL,
 		"-e", "SENDER=" + config.sender,
 		"-e", "DURATION=" + config.duration,
+	}
+	for _, envVar := range config.extraEnv {
+		args = append(args, "-e", envVar)
+	}
+	args = append(args, config.scriptPath)
+
+	cmd := exec.CommandContext(ctx, "k6", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return ctx.Err()
+		}
+		return fmt.Errorf("run k6: %w", err)
+	}
+	return nil
+}
+
+func runHotelK6Open(config hotelK6OpenRunConfig) error {
+	ctx, cancel := context.WithTimeout(context.Background(), config.deadline)
+	defer cancel()
+
+	args := []string{
+		"run",
+		"-e", "HOTEL_TARGET_URL=" + config.targetURL,
+		"-e", "HOTEL_SENDER=" + config.sender,
+		"-e", "HOTEL_RATE=" + strconv.Itoa(config.rate),
+		"-e", "HOTEL_DURATION=" + config.duration,
+		"-e", "HOTEL_PRE_ALLOCATED_VUS=" + strconv.Itoa(config.preAllocatedVUs),
+		"-e", "HOTEL_MAX_VUS=" + strconv.Itoa(config.maxVUs),
 	}
 	for _, envVar := range config.extraEnv {
 		args = append(args, "-e", envVar)

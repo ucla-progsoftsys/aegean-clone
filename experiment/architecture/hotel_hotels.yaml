@@ -6,7 +6,7 @@ services:
     - node1
     - node2
     - node3
-    client_workflow: hotel_k6_closed_hotels_client
+    client_workflow: hotel_k6_open_hotels_client
   frontend:
     type: server
     clients:
