@@ -133,7 +133,7 @@ def create_results_run_dir(relative_run_config_path, results_dir="results", time
     return run_dir
 
 
-def collect_logs(run_dir, node_names, client_names, enable_pprof=True, enable_tracing=True):
+def collect_logs(run_dir, node_names, client_names, enable_pprof=False, enable_tracing=False):
     logger.info("Collecting logs (%d nodes, %d clients)", len(node_names), len(client_names))
 
     for name in node_names:
@@ -223,7 +223,7 @@ def build_binary(build_node):
     )
 
 
-def launch_nodes(node_names, config_path, enable_pprof=True, enable_tracing=True):
+def launch_nodes(node_names, config_path, enable_pprof=False, enable_tracing=False):
     logger.info("Launching %d nodes", len(node_names))
     if node_names:
         build_binary(node_names[0])
@@ -426,7 +426,7 @@ def aggregate_runs(per_run_metrics):
     return aggregated
 
 
-def run_experiment(config_path, enable_pprof=True, enable_tracing=True, timestamped=False):
+def run_experiment(config_path, enable_pprof=False, enable_tracing=False, timestamped=False):
     _, relative_run_config_path, architecture_path, run_config = load_run_config(config_path)
     node_names, client_names = load_experiment_topology(architecture_path)
     run_dir = create_results_run_dir(relative_run_config_path, timestamped=timestamped)
@@ -454,7 +454,7 @@ def run_experiment(config_path, enable_pprof=True, enable_tracing=True, timestam
     return run_dir, client_names
 
 
-def run_experiment_n_times(config_path, n, enable_pprof=True, enable_tracing=True):
+def run_experiment_n_times(config_path, n, enable_pprof=False, enable_tracing=False):
     logger.info("Running experiment %d times: %s", n, config_path)
     run_dirs = []
     per_run_metrics = []
@@ -516,14 +516,14 @@ def main():
         help="Run all configs under experiment/runs and experiment/runs/*",
     )
     parser.add_argument(
-        "--disable-pprof",
+        "--enable-pprof",
         action="store_true",
-        help="Disable pprof env injection and pprof artifact collection.",
+        help="Enable pprof env injection and pprof artifact collection.",
     )
     parser.add_argument(
-        "--disable-tracing",
+        "--enable-tracing",
         action="store_true",
-        help="Disable tracing env injection and otel artifact collection.",
+        help="Enable tracing env injection and otel artifact collection.",
     )
     parser.add_argument(
         "--runs",
@@ -533,8 +533,8 @@ def main():
     )
     args = parser.parse_args()
 
-    enable_pprof = not args.disable_pprof
-    enable_tracing = not args.disable_tracing
+    enable_pprof = args.enable_pprof
+    enable_tracing = args.enable_tracing
 
     if args.all:
         if args.config_path:
