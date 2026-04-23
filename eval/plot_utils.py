@@ -23,24 +23,35 @@ def duration_to_ms(value: str, unit: str) -> float:
     return duration
 
 
+def extract_throughput_and_latency(text: str, *, source: str = "<text>") -> tuple[float, float, float]:
+    throughput_match = THROUGHPUT_RE.search(text)
+    latency_match = LATENCY_RE.search(text)
+
+    if not throughput_match:
+        raise ValueError(f"Could not find http_reqs throughput in {source}")
+    if not latency_match:
+        raise ValueError(f"Could not find median/p90 latency in {source}")
+
+    throughput = float(throughput_match.group(1))
+    median_ms = duration_to_ms(latency_match.group(1), latency_match.group(2))
+    p90_ms = duration_to_ms(latency_match.group(3), latency_match.group(4))
+    return throughput, median_ms, p90_ms
+
+
+def parse_metrics_log(log_path: Path) -> tuple[float, float, float]:
+    return extract_throughput_and_latency(log_path.read_text(), source=str(log_path))
+
+
 def parse_metric_log(log_path: Path, x_axis_re: re.Pattern[str]) -> tuple[float, float, float, float]:
     text = log_path.read_text()
 
     x_axis_match = x_axis_re.search(log_path.parent.name)
-    throughput_match = THROUGHPUT_RE.search(text)
-    latency_match = LATENCY_RE.search(text)
 
     if not x_axis_match:
         raise ValueError(f"Could not parse x-axis value from directory name: {log_path.parent.name}")
-    if not throughput_match:
-        raise ValueError(f"Could not find http_reqs throughput in {log_path}")
-    if not latency_match:
-        raise ValueError(f"Could not find median/p90 latency in {log_path}")
 
     x_axis_value = float(x_axis_match.group(1))
-    throughput = float(throughput_match.group(1))
-    median_ms = duration_to_ms(latency_match.group(1), latency_match.group(2))
-    p90_ms = duration_to_ms(latency_match.group(3), latency_match.group(4))
+    throughput, median_ms, p90_ms = parse_metrics_log(log_path)
     return x_axis_value, throughput, median_ms, p90_ms
 
 
@@ -76,16 +87,12 @@ def collect_data_aggregated(
         if not x_axis_match:
             continue
 
-        text = log_path.read_text()
-        throughput_match = THROUGHPUT_RE.search(text)
-        latency_match = LATENCY_RE.search(text)
-        if not throughput_match or not latency_match:
+        try:
+            throughput, median_ms, p90_ms = parse_metrics_log(log_path)
+        except ValueError:
             continue
 
         x_val = float(x_axis_match.group(1))
-        throughput = float(throughput_match.group(1))
-        median_ms = duration_to_ms(latency_match.group(1), latency_match.group(2))
-        p90_ms = duration_to_ms(latency_match.group(3), latency_match.group(4))
 
         grouped.setdefault(x_val, []).append((throughput, median_ms, p90_ms))
 
