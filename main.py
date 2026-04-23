@@ -133,17 +133,14 @@ def list_run_config_paths(runs_dir=None):
         runs_dir = os.path.join(REPO_ROOT, "experiment", "runs")
 
     patterns = [
-        os.path.join(runs_dir, "*.json"),
-        os.path.join(runs_dir, "*.yaml"),
-        os.path.join(runs_dir, "*.yml"),
-        os.path.join(runs_dir, "*", "*.json"),
-        os.path.join(runs_dir, "*", "*.yaml"),
-        os.path.join(runs_dir, "*", "*.yml"),
+        os.path.join(runs_dir, "**", "*.json"),
+        os.path.join(runs_dir, "**", "*.yaml"),
+        os.path.join(runs_dir, "**", "*.yml"),
     ]
 
     run_config_paths = []
     for pattern in patterns:
-        run_config_paths.extend(glob.glob(pattern))
+        run_config_paths.extend(glob.glob(pattern, recursive=True))
 
     return sorted(os.path.abspath(path) for path in run_config_paths)
 
@@ -611,6 +608,11 @@ def main():
         help="Enable tracing env injection and otel artifact collection.",
     )
     parser.add_argument(
+        "--dir",
+        dest="config_dir",
+        help="Run every config YAML or JSON file under the provided directory recursively.",
+    )
+    parser.add_argument(
         "--runs",
         type=int,
         default=1,
@@ -624,6 +626,8 @@ def main():
     if args.all:
         if args.config_path:
             parser.error("config_path cannot be used with --all")
+        if args.config_dir:
+            parser.error("--dir cannot be used with --all")
         config_paths = list_run_config_paths()
         if not config_paths:
             parser.error("no run configs found under experiment/runs")
@@ -634,8 +638,26 @@ def main():
                 run_experiment(config_path, enable_pprof=enable_pprof, enable_tracing=enable_tracing)
         return
 
+    if args.config_dir:
+        if args.config_path:
+            parser.error("config_path cannot be used with --dir")
+        config_dir = os.path.abspath(args.config_dir)
+        if not os.path.isdir(config_dir):
+            parser.error(f"--dir must point to an existing directory: {args.config_dir}")
+        config_paths = list_run_config_paths(config_dir)
+        if not config_paths:
+            parser.error(f"no run configs found under {config_dir}")
+        for config_path in config_paths:
+            if args.runs > 1:
+                run_experiment_n_times(
+                    config_path, args.runs, enable_pprof=enable_pprof, enable_tracing=enable_tracing
+                )
+            else:
+                run_experiment(config_path, enable_pprof=enable_pprof, enable_tracing=enable_tracing)
+        return
+
     if not args.config_path:
-        parser.error("config_path is required unless --all is used")
+        parser.error("config_path is required unless --all or --dir is used")
 
     if args.runs > 1:
         output_path = run_experiment_n_times(
