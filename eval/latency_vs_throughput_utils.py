@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterable
 
 try:
     import matplotlib.pyplot as plt
@@ -128,4 +129,42 @@ def generate_workload_plot(
         output_path,
         f"{humanize_workload_name(workload_name)} Latency vs Realized Throughput",
     )
+    return output_path
+
+
+@dataclass(frozen=True)
+class SeriesSpec:
+    label: str
+    series_dir: Path
+
+
+def collect_named_series(series_specs: Iterable[SeriesSpec]) -> dict[str, list[MetricPoint]]:
+    series: dict[str, list[MetricPoint]] = {}
+
+    for series_spec in series_specs:
+        if not series_spec.series_dir.is_dir():
+            print(f"Skipping {series_spec.label}: missing directory {series_spec.series_dir}")
+            continue
+        try:
+            points = load_series_points(series_spec.series_dir)
+        except ValueError as exc:
+            print(f"Skipping {series_spec.label}: {exc}")
+            continue
+        series[series_spec.label] = points
+
+    if not series:
+        raise ValueError("No complete result sets found for requested series")
+
+    return series
+
+
+def generate_comparison_plot(
+    *,
+    title: str,
+    output_path: Path,
+    series_specs: Iterable[SeriesSpec],
+) -> Path:
+    series = collect_named_series(series_specs)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plot_latency_vs_throughput(series, output_path, title)
     return output_path
