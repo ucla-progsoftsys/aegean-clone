@@ -2,6 +2,7 @@ package externalsrvworkflow
 
 import (
 	"aegean/common"
+	netx "aegean/net"
 	"aegean/nodes"
 	"fmt"
 	"math/rand/v2"
@@ -33,9 +34,8 @@ func ExternalServiceLogic(es *nodes.ExternalService, payload map[string]any) map
 	mode := common.MustString(es.RunConfig, "external_service_mode")
 
 	response := map[string]any{
-		"request_id": payload["request_id"],
-		"status":     "ok",
-		"mode":       mode,
+		"status": "ok",
+		"mode":   mode,
 	}
 
 	switch mode {
@@ -47,7 +47,25 @@ func ExternalServiceLogic(es *nodes.ExternalService, payload map[string]any) map
 	case "no_side_effect":
 		response["value"] = currentMonotonicValue()
 	}
-	return response
+
+	fullResponse := map[string]any{
+		"type":       "response",
+		"request_id": requestID,
+		"response":   response,
+		"sender":     es.Name,
+	}
+	if parentRequestID, ok := payload["parent_request_id"]; ok && parentRequestID != nil {
+		fullResponse["parent_request_id"] = parentRequestID
+	}
+
+	sender, _ := payload["sender"].(string)
+	if sender != "" {
+		go func(target string, responsePayload map[string]any) {
+			_, _ = netx.SendMessage(target, 8000, responsePayload)
+		}(sender, fullResponse)
+	}
+
+	return map[string]any{"status": "accepted", "request_id": requestID}
 }
 
 func idempotentValueForRequest(requestID any) float64 {

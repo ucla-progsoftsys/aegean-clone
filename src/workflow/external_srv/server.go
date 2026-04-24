@@ -3,7 +3,6 @@ package externalsrvworkflow
 import (
 	"aegean/common"
 	"aegean/components/exec"
-	netx "aegean/net"
 	"fmt"
 )
 
@@ -95,47 +94,9 @@ func dispatchExternalServiceRequest(e *exec.Exec, request map[string]any) {
 		"op":                "external_call",
 		"op_payload":        request["op_payload"],
 	}
-	prepared, ok := e.PrepareNestedRequestPayload(request, outgoing)
-	if !ok {
+	if common.BoolOrDefault(e.RunConfig, "nested_use_eo", false) {
+		e.DispatchNestedRequestEO(request, []string{"node4"}, outgoing)
 		return
 	}
-
-	useEO := common.BoolOrDefault(e.RunConfig, "nested_use_eo", false)
-	if useEO && !e.ClaimNestedRequestEO(prepared) {
-		return
-	}
-
-	go func(requestID any, outgoing map[string]any) {
-		externalResp, err := netx.SendMessage("node4", 8000, outgoing)
-		if err != nil {
-			response := map[string]any{
-				"request_id":        outgoing["request_id"],
-				"parent_request_id": requestID,
-				"response": map[string]any{
-					"request_id": requestID,
-					"status":     "error",
-					"error":      "external_service_call_failed",
-				},
-			}
-			if useEO {
-				response["shim_quorum_aggregated"] = true
-				e.BufferExactOnceNestedResponse(response)
-				return
-			}
-			e.BufferNestedResponse(response)
-			return
-		}
-
-		response := map[string]any{
-			"request_id":        outgoing["request_id"],
-			"parent_request_id": requestID,
-			"response":          externalResp,
-		}
-		if useEO {
-			response["shim_quorum_aggregated"] = true
-			e.BufferExactOnceNestedResponse(response)
-			return
-		}
-		e.BufferNestedResponse(response)
-	}(requestID, prepared)
+	e.DispatchNestedRequestDirect(request, []string{"node4"}, outgoing)
 }
