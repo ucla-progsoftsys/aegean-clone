@@ -2,7 +2,6 @@ package socialworkflow
 
 import (
 	"aegean/common"
-	"aegean/components/exec"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -44,9 +43,9 @@ func nestedRequestTargets(runConfig map[string]any, replicas []string) []string 
 	return append([]string{}, replicas...)
 }
 
-func socialDispatchNestedRequest(e *exec.Exec, sourceRequest map[string]any, targets []string, outgoing map[string]any) {
-	selectedTargets := nestedRequestTargets(e.RunConfig, targets)
-	if common.BoolOrDefault(e.RunConfig, "social_nested_use_eo", false) {
+func socialDispatchNestedRequest(e workflowRuntime, sourceRequest map[string]any, targets []string, outgoing map[string]any) {
+	selectedTargets := nestedRequestTargets(e.GetRunConfig(), targets)
+	if common.BoolOrDefault(e.GetRunConfig(), "social_nested_use_eo", false) {
 		e.DispatchNestedRequestEO(sourceRequest, selectedTargets, outgoing)
 		return
 	}

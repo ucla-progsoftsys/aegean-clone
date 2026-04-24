@@ -1,9 +1,5 @@
 package socialworkflow
 
-import (
-	"aegean/components/exec"
-)
-
 const (
 	homeTimelineStageContextKey   = "social_home_timeline_stage"
 	homeTimelinePayloadContextKey = "social_home_timeline_payload"
@@ -18,7 +14,7 @@ var homeTimelinePostStorageTargets = []string{"node4", "node5", "node6"}
 // HomeTimeline has two independent responsibilities:
 // write_home_timeline fans a post out to followers, while read_home_timeline
 // resolves stored post IDs into full post objects through post_storage.
-func ExecuteRequestHomeTimeline(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestHomeTimeline(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 
 	requestID := request["request_id"]

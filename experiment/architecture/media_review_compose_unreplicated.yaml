@@ -1,0 +1,114 @@
+---
+services:
+  client:
+    type: client
+    next:
+    - node1
+    client_workflow: media_k6_open_review_compose_client
+  review_compose_api:
+    type: unreplicated_server
+    clients:
+    - node0
+    nodes:
+    - node1
+    exec_workflow: media_review_compose_api
+    init_state_workflow: media_default
+  user:
+    type: unreplicated_server
+    clients:
+    - node1
+    nodes:
+    - node4
+    exec_workflow: media_user
+    init_state_workflow: media_default
+  movie_id:
+    type: unreplicated_server
+    clients:
+    - node1
+    nodes:
+    - node7
+    exec_workflow: media_movie_id
+    init_state_workflow: media_default
+  text:
+    type: unreplicated_server
+    clients:
+    - node1
+    nodes:
+    - node10
+    exec_workflow: media_text
+    init_state_workflow: media_default
+  unique_id:
+    type: unreplicated_server
+    clients:
+    - node1
+    nodes:
+    - node13
+    exec_workflow: media_unique_id
+    init_state_workflow: media_default
+  rating:
+    type: unreplicated_server
+    clients:
+    - node7
+    nodes:
+    - node16
+    exec_workflow: media_rating
+    init_state_workflow: media_default
+  compose_review:
+    type: unreplicated_server
+    clients:
+    - node4
+    - node7
+    - node10
+    - node13
+    - node16
+    nodes:
+    - node19
+    exec_workflow: media_compose_review
+    init_state_workflow: media_default
+  review_storage:
+    type: unreplicated_server
+    clients:
+    - node19
+    nodes:
+    - node22
+    exec_workflow: media_review_storage
+    init_state_workflow: media_default
+  user_review:
+    type: unreplicated_server
+    clients:
+    - node19
+    nodes:
+    - node25
+    exec_workflow: media_user_review
+    init_state_workflow: media_default
+  movie_review:
+    type: unreplicated_server
+    clients:
+    - node19
+    nodes:
+    - node28
+    exec_workflow: media_movie_review
+    init_state_workflow: media_default
+nodes:
+  node0:
+    service: client
+  node1:
+    service: review_compose_api
+  node4:
+    service: user
+  node7:
+    service: movie_id
+  node10:
+    service: text
+  node13:
+    service: unique_id
+  node16:
+    service: rating
+  node19:
+    service: compose_review
+  node22:
+    service: review_storage
+  node25:
+    service: user_review
+  node28:
+    service: movie_review

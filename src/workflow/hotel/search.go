@@ -1,9 +1,5 @@
 package hotelworkflow
 
-import (
-	"aegean/components/exec"
-)
-
 const (
 	searchStageContextKey   = "hotel_search_stage"
 	searchPayloadContextKey = "hotel_search_payload"
@@ -17,7 +13,7 @@ var (
 	hotelRateTargets = []string{"node10", "node11", "node12"}
 )
 
-func ExecuteRequestSearch(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestSearch(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 
 	requestID := request["request_id"]

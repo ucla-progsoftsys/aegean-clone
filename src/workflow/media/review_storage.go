@@ -1,8 +1,6 @@
 package mediaworkflow
 
-import "aegean/components/exec"
-
-func ExecuteRequestReviewStorage(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestReviewStorage(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 	_ = ndTimestamp
 

@@ -1,7 +1,5 @@
 package mediaworkflow
 
-import "aegean/components/exec"
-
 const (
 	reviewComposeAPIStageContextKey = "media_review_compose_api_stage"
 	reviewComposeAPIStageAwait      = "await_first_tier"
@@ -14,7 +12,7 @@ var (
 	mediaUniqueIDTargets = []string{"node13", "node14", "node15"}
 )
 
-func ExecuteRequestReviewComposeAPI(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestReviewComposeAPI(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 
 	requestID := request["request_id"]
@@ -70,7 +68,7 @@ func validateReviewComposePayload(requestID any, payload map[string]any) map[str
 	return nil
 }
 
-func dispatchReviewComposeFanout(e *exec.Exec, request map[string]any, payload map[string]any, ndTimestamp float64) {
+func dispatchReviewComposeFanout(e workflowRuntime, request map[string]any, payload map[string]any, ndTimestamp float64) {
 	requestID := request["request_id"]
 	reviewRequestID := mediaReviewRequestIDFromPayload(payload, requestID)
 	rating, _ := mediaPayloadInt(payload, "rating")

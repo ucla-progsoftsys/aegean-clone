@@ -1,10 +1,8 @@
 package socialworkflow
 
-import "aegean/components/exec"
-
 // SocialGraph is the follower index. In this subset it is primarily used by
 // home_timeline to discover which users should receive a fanout write.
-func ExecuteRequestSocialGraph(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestSocialGraph(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 	_ = ndTimestamp
 

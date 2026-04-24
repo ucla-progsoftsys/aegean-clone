@@ -2,7 +2,6 @@ package mediaworkflow
 
 import (
 	"aegean/common"
-	"aegean/components/exec"
 	"context"
 	"log"
 	"os"
@@ -77,11 +76,11 @@ func getMediaRedisClient(runConfig map[string]any) (*redis.Client, error) {
 	return mediaRedisClient, nil
 }
 
-func mediaReadKV(e *exec.Exec, key string) string {
+func mediaReadKV(e workflowRuntime, key string) string {
 	if value := e.ReadKV(key); value != "" {
 		return value
 	}
-	client, err := getMediaRedisClient(e.RunConfig)
+	client, err := getMediaRedisClient(e.GetRunConfig())
 	if err != nil {
 		log.Printf("media redis read unavailable for %s: %v", key, err)
 		return ""
@@ -103,9 +102,9 @@ func mediaReadKV(e *exec.Exec, key string) string {
 	}
 }
 
-func mediaWriteKV(e *exec.Exec, key, value string) {
+func mediaWriteKV(e workflowRuntime, key, value string) {
 	e.WriteKV(key, value)
-	client, err := getMediaRedisClient(e.RunConfig)
+	client, err := getMediaRedisClient(e.GetRunConfig())
 	if err != nil {
 		log.Printf("media redis write unavailable for %s: %v", key, err)
 		return
@@ -120,8 +119,8 @@ func mediaWriteKV(e *exec.Exec, key, value string) {
 	}
 }
 
-func mediaPersistStateSeed(e *exec.Exec, state map[string]string) {
-	client, err := getMediaRedisClient(e.RunConfig)
+func mediaPersistStateSeed(e workflowRuntime, state map[string]string) {
+	client, err := getMediaRedisClient(e.GetRunConfig())
 	if err != nil {
 		log.Printf("media redis seed unavailable: %v", err)
 		return

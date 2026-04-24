@@ -1,0 +1,30 @@
+---
+services:
+  client:
+    type: client
+    next:
+    - node1
+    client_workflow: social_k6_open_read_user_timeline_client
+  user_timeline:
+    type: unreplicated_server
+    clients:
+    - node0
+    nodes:
+    - node1
+    exec_workflow: social_user_timeline
+    init_state_workflow: social_default
+  post_storage:
+    type: unreplicated_server
+    clients:
+    - node1
+    nodes:
+    - node4
+    exec_workflow: social_post_storage
+    init_state_workflow: social_default
+nodes:
+  node0:
+    service: client
+  node1:
+    service: user_timeline
+  node4:
+    service: post_storage

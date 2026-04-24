@@ -1,7 +1,6 @@
 package mediaworkflow
 
 import (
-	"aegean/components/exec"
 	"strconv"
 )
 
@@ -10,7 +9,7 @@ const (
 	mediaUserStageAwait      = "await_compose_review"
 )
 
-func ExecuteRequestUser(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestUser(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 
 	requestID := request["request_id"]

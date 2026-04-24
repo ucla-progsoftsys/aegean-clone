@@ -1,0 +1,60 @@
+---
+services:
+  client:
+    type: client
+    next:
+    - node1
+    client_workflow: social_k6_open_client
+  compose_post:
+    type: unreplicated_server
+    clients:
+    - node0
+    nodes:
+    - node1
+    exec_workflow: social_compose_post
+    init_state_workflow: social_default
+  post_storage:
+    type: unreplicated_server
+    clients:
+    - node1
+    nodes:
+    - node4
+    exec_workflow: social_post_storage
+    init_state_workflow: social_default
+  user_timeline:
+    type: unreplicated_server
+    clients:
+    - node1
+    nodes:
+    - node7
+    exec_workflow: social_user_timeline
+    init_state_workflow: social_default
+  home_timeline:
+    type: unreplicated_server
+    clients:
+    - node1
+    nodes:
+    - node10
+    exec_workflow: social_home_timeline
+    init_state_workflow: social_default
+  social_graph:
+    type: unreplicated_server
+    clients:
+    - node10
+    nodes:
+    - node13
+    exec_workflow: social_social_graph
+    init_state_workflow: social_default
+nodes:
+  node0:
+    service: client
+  node1:
+    service: compose_post
+  node4:
+    service: post_storage
+  node7:
+    service: user_timeline
+  node10:
+    service: home_timeline
+  node13:
+    service: social_graph

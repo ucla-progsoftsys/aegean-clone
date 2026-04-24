@@ -30,6 +30,10 @@ type Engine struct {
 	nestedReadyCh  map[string]chan struct{}
 }
 
+func (e *Engine) GetRunConfig() map[string]any {
+	return e.RunConfig
+}
+
 func NewEngine(name string, runConfig map[string]any, initStateFn InitStateFunc) *Engine {
 	e := &Engine{
 		Name:           name,
@@ -131,6 +135,10 @@ func (e *Engine) DispatchNestedRequestDirect(sourceRequest map[string]any, targe
 			_, _ = netx.SendMessage(target, 8000, outgoing)
 		}(target, duplicated)
 	}
+}
+
+func (e *Engine) DispatchNestedRequestEO(sourceRequest map[string]any, targets []string, outgoing map[string]any) {
+	e.DispatchNestedRequestDirect(sourceRequest, targets, outgoing)
 }
 
 func (e *Engine) BufferNestedResponse(payload map[string]any) bool {

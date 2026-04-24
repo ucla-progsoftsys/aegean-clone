@@ -1,9 +1,5 @@
 package mediaworkflow
 
-import (
-	"aegean/components/exec"
-)
-
 const (
 	mediaComposeReviewStageContextKey  = "media_compose_review_stage"
 	mediaComposeReviewReviewContextKey = "media_compose_review_review"
@@ -23,7 +19,7 @@ var (
 	mediaMovieReviewTargets   = []string{"node28", "node29", "node30"}
 )
 
-func ExecuteRequestComposeReview(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestComposeReview(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 
 	requestID := request["request_id"]
@@ -81,7 +77,7 @@ func ExecuteRequestComposeReview(e *exec.Exec, request map[string]any, ndSeed in
 	}
 }
 
-func mediaCompleteAfterComposeResponse(e *exec.Exec, request map[string]any) map[string]any {
+func mediaCompleteAfterComposeResponse(e workflowRuntime, request map[string]any) map[string]any {
 	requestID := request["request_id"]
 	nestedResponses, ok := e.GetNestedResponses(requestID)
 	if !ok || !mediaNestedResponsesReady(nestedResponses, requestID, "compose_review") {
@@ -143,7 +139,7 @@ func mediaExtractComposeComponent(request map[string]any) (string, string, strin
 	}
 }
 
-func mediaTryBuildReview(e *exec.Exec, reviewRequestID string, ndTimestamp float64) (MediaReview, bool) {
+func mediaTryBuildReview(e workflowRuntime, reviewRequestID string, ndTimestamp float64) (MediaReview, bool) {
 	rawReviewID := mediaReadKV(e, mediaComposeComponentKey(reviewRequestID, mediaComponentReviewID))
 	rawMovieID := mediaReadKV(e, mediaComposeComponentKey(reviewRequestID, mediaComponentMovieID))
 	rawUserID := mediaReadKV(e, mediaComposeComponentKey(reviewRequestID, mediaComponentUserID))
@@ -169,7 +165,7 @@ func mediaTryBuildReview(e *exec.Exec, reviewRequestID string, ndTimestamp float
 	}, true
 }
 
-func dispatchComposedReviewWrites(e *exec.Exec, request map[string]any, review MediaReview, ndTimestamp float64) {
+func dispatchComposedReviewWrites(e workflowRuntime, request map[string]any, review MediaReview, ndTimestamp float64) {
 	requestID := request["request_id"]
 	reviewPayload := mediaReviewToPayload(review)
 

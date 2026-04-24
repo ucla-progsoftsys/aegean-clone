@@ -1,13 +1,11 @@
 package mediaworkflow
 
-import "aegean/components/exec"
-
 const (
 	mediaTextStageContextKey = "media_text_stage"
 	mediaTextStageAwait      = "await_compose_review"
 )
 
-func ExecuteRequestText(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestText(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 
 	requestID := request["request_id"]

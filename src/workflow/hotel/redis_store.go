@@ -2,7 +2,6 @@ package hotelworkflow
 
 import (
 	"aegean/common"
-	"aegean/components/exec"
 	"context"
 	"fmt"
 	"log"
@@ -79,11 +78,11 @@ func getHotelRedisClient(runConfig map[string]any) (*redis.Client, error) {
 	return hotelRedisClient, nil
 }
 
-func hotelReadKV(e *exec.Exec, key string) string {
+func hotelReadKV(e workflowRuntime, key string) string {
 	if value := e.ReadKV(key); value != "" {
 		return value
 	}
-	client, err := getHotelRedisClient(e.RunConfig)
+	client, err := getHotelRedisClient(e.GetRunConfig())
 	if err != nil {
 		log.Printf("hotel redis read unavailable for %s: %v", key, err)
 		return ""
@@ -105,9 +104,9 @@ func hotelReadKV(e *exec.Exec, key string) string {
 	}
 }
 
-func hotelWriteKV(e *exec.Exec, key, value string) {
+func hotelWriteKV(e workflowRuntime, key, value string) {
 	e.WriteKV(key, value)
-	client, err := getHotelRedisClient(e.RunConfig)
+	client, err := getHotelRedisClient(e.GetRunConfig())
 	if err != nil {
 		log.Printf("hotel redis write unavailable for %s: %v", key, err)
 		return
@@ -122,9 +121,9 @@ func hotelWriteKV(e *exec.Exec, key, value string) {
 	}
 }
 
-func hotelLoadOrSeedState(e *exec.Exec, serviceName string, seed map[string]string) map[string]string {
+func hotelLoadOrSeedState(e workflowRuntime, serviceName string, seed map[string]string) map[string]string {
 	state := common.CopyStringMap(seed)
-	client, err := getHotelRedisClient(e.RunConfig)
+	client, err := getHotelRedisClient(e.GetRunConfig())
 	if err != nil {
 		log.Printf("hotel redis hydrate unavailable for %s: %v", serviceName, err)
 		return state

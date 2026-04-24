@@ -1,7 +1,6 @@
 package socialworkflow
 
 import (
-	"aegean/components/exec"
 	"context"
 	"log"
 	"os"
@@ -67,7 +66,7 @@ func getSocialRedisClient() (*redis.Client, error) {
 	return socialRedisClient, nil
 }
 
-func socialReadKV(e *exec.Exec, key string) string {
+func socialReadKV(e workflowRuntime, key string) string {
 	if value := e.ReadKV(key); value != "" {
 		return value
 	}
@@ -93,7 +92,7 @@ func socialReadKV(e *exec.Exec, key string) string {
 	}
 }
 
-func socialWriteKV(e *exec.Exec, key, value string) {
+func socialWriteKV(e workflowRuntime, key, value string) {
 	e.WriteKV(key, value)
 	client, err := getSocialRedisClient()
 	if err != nil {

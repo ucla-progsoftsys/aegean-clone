@@ -2,7 +2,6 @@ package mediaworkflow
 
 import (
 	"aegean/common"
-	"aegean/components/exec"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
@@ -115,9 +114,9 @@ func mediaNestedTargets(runConfig map[string]any, replicas []string) []string {
 	return append([]string{}, replicas...)
 }
 
-func mediaDispatchNestedRequest(e *exec.Exec, sourceRequest map[string]any, targets []string, outgoing map[string]any) {
-	selectedTargets := mediaNestedTargets(e.RunConfig, targets)
-	if common.BoolOrDefault(e.RunConfig, "media_nested_use_eo", false) {
+func mediaDispatchNestedRequest(e workflowRuntime, sourceRequest map[string]any, targets []string, outgoing map[string]any) {
+	selectedTargets := mediaNestedTargets(e.GetRunConfig(), targets)
+	if common.BoolOrDefault(e.GetRunConfig(), "media_nested_use_eo", false) {
 		e.DispatchNestedRequestEO(sourceRequest, selectedTargets, outgoing)
 		return
 	}

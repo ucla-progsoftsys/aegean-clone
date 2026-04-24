@@ -1,7 +1,5 @@
 package mediaworkflow
 
-import "aegean/components/exec"
-
 const (
 	mediaMovieIDStageContextKey = "media_movie_id_stage"
 	mediaMovieIDStageAwait      = "await_compose_and_rating"
@@ -9,7 +7,7 @@ const (
 
 var mediaRatingTargets = []string{"node16", "node17", "node18"}
 
-func ExecuteRequestMovieID(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestMovieID(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 
 	requestID := request["request_id"]

@@ -2,10 +2,9 @@ package mediaworkflow
 
 import (
 	"aegean/common"
-	"aegean/components/exec"
 )
 
-func ExecuteRequestMovieReview(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestMovieReview(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 	_ = ndTimestamp
 
@@ -22,7 +21,7 @@ func ExecuteRequestMovieReview(e *exec.Exec, request map[string]any, ndSeed int6
 		}
 		key := mediaMovieReviewKey(movieID)
 		existing := decodeMediaReviewIndex(mediaReadKV(e, key))
-		maxEntries := common.IntOrDefault(e.RunConfig, "media_max_reviews_per_index", 100)
+		maxEntries := common.IntOrDefault(e.GetRunConfig(), "media_max_reviews_per_index", 100)
 		updated := prependMediaReviewIndex(existing, MediaReviewIndexEntry{ReviewID: reviewID, Timestamp: timestamp}, maxEntries)
 		mediaWriteKV(e, key, encodeMediaReviewIndex(updated))
 		return mediaNestedOkResponse(request)

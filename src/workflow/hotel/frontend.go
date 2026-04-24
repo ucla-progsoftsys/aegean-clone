@@ -1,7 +1,5 @@
 package hotelworkflow
 
-import "aegean/components/exec"
-
 const (
 	frontendStageContextKey   = "hotel_frontend_stage"
 	frontendPayloadContextKey = "hotel_frontend_payload"
@@ -24,7 +22,7 @@ var (
 	hotelUserTargets           = []string{"node22", "node23", "node24"}
 )
 
-func ExecuteRequestFrontend(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestFrontend(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 
 	requestID := request["request_id"]
@@ -46,7 +44,7 @@ func ExecuteRequestFrontend(e *exec.Exec, request map[string]any, ndSeed int64, 
 	}
 }
 
-func executeFrontendSearch(e *exec.Exec, request map[string]any, stage string, ndTimestamp float64) map[string]any {
+func executeFrontendSearch(e workflowRuntime, request map[string]any, stage string, ndTimestamp float64) map[string]any {
 	requestID := request["request_id"]
 	payload := hotelPayload(request)
 
@@ -147,7 +145,7 @@ func executeFrontendSearch(e *exec.Exec, request map[string]any, stage string, n
 	}
 }
 
-func executeFrontendRecommendation(e *exec.Exec, request map[string]any, stage string, ndTimestamp float64) map[string]any {
+func executeFrontendRecommendation(e workflowRuntime, request map[string]any, stage string, ndTimestamp float64) map[string]any {
 	requestID := request["request_id"]
 	payload := hotelPayload(request)
 
@@ -217,7 +215,7 @@ func executeFrontendRecommendation(e *exec.Exec, request map[string]any, stage s
 	}
 }
 
-func executeFrontendCheckUser(e *exec.Exec, request map[string]any, stage string, ndTimestamp float64) map[string]any {
+func executeFrontendCheckUser(e workflowRuntime, request map[string]any, stage string, ndTimestamp float64) map[string]any {
 	requestID := request["request_id"]
 	payload := hotelPayload(request)
 
@@ -254,7 +252,7 @@ func executeFrontendCheckUser(e *exec.Exec, request map[string]any, stage string
 	}
 }
 
-func executeFrontendReservation(e *exec.Exec, request map[string]any, stage string, ndTimestamp float64) map[string]any {
+func executeFrontendReservation(e workflowRuntime, request map[string]any, stage string, ndTimestamp float64) map[string]any {
 	requestID := request["request_id"]
 	payload := hotelPayload(request)
 

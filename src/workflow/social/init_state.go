@@ -2,14 +2,13 @@ package socialworkflow
 
 import (
 	"aegean/common"
-	"aegean/components/exec"
 	"fmt"
 )
 
 // InitState seeds the subset services independently so each benchmark can start
 // from a realistic social-network dataset without replaying writes first.
-func InitState(e *exec.Exec) map[string]string {
-	serviceName := common.MustString(e.RunConfig, "service_name")
+func InitState(e workflowRuntime) map[string]string {
+	serviceName := common.MustString(e.GetRunConfig(), "service_name")
 	var state map[string]string
 	switch serviceName {
 	case "post_storage":
@@ -38,9 +37,9 @@ func socialServiceHasPersistentState(serviceName string) bool {
 	}
 }
 
-func initPostStorageState(e *exec.Exec) map[string]string {
-	userCount := common.MustInt(e.RunConfig, "social_user_count")
-	postsPerUser := common.IntOrDefault(e.RunConfig, "social_seed_posts_per_user", 0)
+func initPostStorageState(e workflowRuntime) map[string]string {
+	userCount := common.MustInt(e.GetRunConfig(), "social_user_count")
+	postsPerUser := common.IntOrDefault(e.GetRunConfig(), "social_seed_posts_per_user", 0)
 	if userCount <= 0 || postsPerUser <= 0 {
 		return map[string]string{}
 	}
@@ -57,9 +56,9 @@ func initPostStorageState(e *exec.Exec) map[string]string {
 	return state
 }
 
-func initUserTimelineState(e *exec.Exec) map[string]string {
-	userCount := common.MustInt(e.RunConfig, "social_user_count")
-	postsPerUser := common.IntOrDefault(e.RunConfig, "social_seed_posts_per_user", 0)
+func initUserTimelineState(e workflowRuntime) map[string]string {
+	userCount := common.MustInt(e.GetRunConfig(), "social_user_count")
+	postsPerUser := common.IntOrDefault(e.GetRunConfig(), "social_seed_posts_per_user", 0)
 	if userCount <= 0 || postsPerUser <= 0 {
 		return map[string]string{}
 	}
@@ -77,10 +76,10 @@ func initUserTimelineState(e *exec.Exec) map[string]string {
 	return state
 }
 
-func initHomeTimelineState(e *exec.Exec) map[string]string {
-	userCount := common.MustInt(e.RunConfig, "social_user_count")
-	postsPerUser := common.IntOrDefault(e.RunConfig, "social_seed_posts_per_user", 0)
-	followersPerUser := common.IntOrDefault(e.RunConfig, "social_followers_per_user", 3)
+func initHomeTimelineState(e workflowRuntime) map[string]string {
+	userCount := common.MustInt(e.GetRunConfig(), "social_user_count")
+	postsPerUser := common.IntOrDefault(e.GetRunConfig(), "social_seed_posts_per_user", 0)
+	followersPerUser := common.IntOrDefault(e.GetRunConfig(), "social_followers_per_user", 3)
 	if userCount <= 0 || postsPerUser <= 0 {
 		return map[string]string{}
 	}
@@ -108,9 +107,9 @@ func initHomeTimelineState(e *exec.Exec) map[string]string {
 	return state
 }
 
-func initSocialGraphState(e *exec.Exec) map[string]string {
-	userCount := common.MustInt(e.RunConfig, "social_user_count")
-	followersPerUser := common.IntOrDefault(e.RunConfig, "social_followers_per_user", 3)
+func initSocialGraphState(e workflowRuntime) map[string]string {
+	userCount := common.MustInt(e.GetRunConfig(), "social_user_count")
+	followersPerUser := common.IntOrDefault(e.GetRunConfig(), "social_followers_per_user", 3)
 	if userCount <= 0 {
 		return map[string]string{}
 	}

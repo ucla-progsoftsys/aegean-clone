@@ -2,12 +2,11 @@ package hotelworkflow
 
 import (
 	"aegean/common"
-	"aegean/components/exec"
 	"sort"
 	"strconv"
 )
 
-func ExecuteRequestGeo(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestGeo(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 	_ = ndTimestamp
 
@@ -32,9 +31,9 @@ func ExecuteRequestGeo(e *exec.Exec, request map[string]any, ndSeed int64, ndTim
 		distance float64
 	}
 
-	hotelCount := common.MustInt(e.RunConfig, "hotel_hotel_count")
-	searchRadiusKm := hotelRunConfigFloatOrDefault(e.RunConfig, "hotel_search_radius_km", hotelSearchRadiusDefaultKm)
-	maxResults := common.IntOrDefault(e.RunConfig, "hotel_search_max_results", hotelSearchMaxResultsDefault)
+	hotelCount := common.MustInt(e.GetRunConfig(), "hotel_hotel_count")
+	searchRadiusKm := hotelRunConfigFloatOrDefault(e.GetRunConfig(), "hotel_search_radius_km", hotelSearchRadiusDefaultKm)
+	maxResults := common.IntOrDefault(e.GetRunConfig(), "hotel_search_max_results", hotelSearchMaxResultsDefault)
 
 	candidates := make([]hotelDistance, 0, hotelCount)
 	for hotelIdx := 1; hotelIdx <= hotelCount; hotelIdx++ {
@@ -73,7 +72,7 @@ func ExecuteRequestGeo(e *exec.Exec, request map[string]any, ndSeed int64, ndTim
 	})
 }
 
-func ExecuteRequestRate(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestRate(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 	_ = ndTimestamp
 
@@ -121,7 +120,7 @@ func ExecuteRequestRate(e *exec.Exec, request map[string]any, ndSeed int64, ndTi
 	})
 }
 
-func ExecuteRequestProfile(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestProfile(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 	_ = ndTimestamp
 
@@ -153,7 +152,7 @@ func ExecuteRequestProfile(e *exec.Exec, request map[string]any, ndSeed int64, n
 	})
 }
 
-func ExecuteRequestRecommendation(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestRecommendation(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 	_ = ndTimestamp
 
@@ -174,7 +173,7 @@ func ExecuteRequestRecommendation(e *exec.Exec, request map[string]any, ndSeed i
 		return hotelErrorResponse(requestID, "missing lon")
 	}
 
-	hotelCount := common.MustInt(e.RunConfig, "hotel_hotel_count")
+	hotelCount := common.MustInt(e.GetRunConfig(), "hotel_hotel_count")
 	hotels := make([]HotelRecommendation, 0, hotelCount)
 	for hotelIdx := 1; hotelIdx <= hotelCount; hotelIdx++ {
 		hotelID := strconv.Itoa(hotelIdx)
@@ -236,7 +235,7 @@ func ExecuteRequestRecommendation(e *exec.Exec, request map[string]any, ndSeed i
 	})
 }
 
-func ExecuteRequestUser(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestUser(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 	_ = ndTimestamp
 
@@ -262,7 +261,7 @@ func ExecuteRequestUser(e *exec.Exec, request map[string]any, ndSeed int64, ndTi
 	})
 }
 
-func ExecuteRequestReservation(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestReservation(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 
 	requestID := request["request_id"]
@@ -340,7 +339,7 @@ func ExecuteRequestReservation(e *exec.Exec, request map[string]any, ndSeed int6
 	}
 }
 
-func hotelReservationAvailable(e *exec.Exec, hotelID string, stayDates []string, roomNumber int) bool {
+func hotelReservationAvailable(e workflowRuntime, hotelID string, stayDates []string, roomNumber int) bool {
 	if hotelID == "" || roomNumber <= 0 {
 		return false
 	}
@@ -356,13 +355,13 @@ func hotelReservationAvailable(e *exec.Exec, hotelID string, stayDates []string,
 	return true
 }
 
-func hotelReservationCapacity(e *exec.Exec, hotelID string) int {
+func hotelReservationCapacity(e workflowRuntime, hotelID string) int {
 	raw := hotelReadKV(e, hotelReservationCapacityKey(hotelID))
 	value, _ := strconv.Atoi(raw)
 	return value
 }
 
-func hotelReservationCount(e *exec.Exec, hotelID, stayDate string) int {
+func hotelReservationCount(e workflowRuntime, hotelID, stayDate string) int {
 	raw := hotelReadKV(e, hotelReservationCountKey(hotelID, stayDate))
 	value, _ := strconv.Atoi(raw)
 	return value

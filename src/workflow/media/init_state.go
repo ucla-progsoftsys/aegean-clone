@@ -2,12 +2,11 @@ package mediaworkflow
 
 import (
 	"aegean/common"
-	"aegean/components/exec"
 	"strconv"
 )
 
-func InitState(e *exec.Exec) map[string]string {
-	serviceName := common.MustString(e.RunConfig, "service_name")
+func InitState(e workflowRuntime) map[string]string {
+	serviceName := common.MustString(e.GetRunConfig(), "service_name")
 	var state map[string]string
 	switch serviceName {
 	case "user":
@@ -34,8 +33,8 @@ func mediaServiceHasPersistentState(serviceName string) bool {
 	}
 }
 
-func initMediaUserState(e *exec.Exec) map[string]string {
-	userCount := common.MustInt(e.RunConfig, "media_user_count")
+func initMediaUserState(e workflowRuntime) map[string]string {
+	userCount := common.MustInt(e.GetRunConfig(), "media_user_count")
 	if userCount <= 0 {
 		return map[string]string{}
 	}
@@ -48,8 +47,8 @@ func initMediaUserState(e *exec.Exec) map[string]string {
 	return state
 }
 
-func initMediaMovieIDState(e *exec.Exec) map[string]string {
-	movieCount := common.MustInt(e.RunConfig, "media_movie_count")
+func initMediaMovieIDState(e workflowRuntime) map[string]string {
+	movieCount := common.MustInt(e.GetRunConfig(), "media_movie_count")
 	if movieCount <= 0 {
 		return map[string]string{}
 	}
@@ -60,8 +59,8 @@ func initMediaMovieIDState(e *exec.Exec) map[string]string {
 	return state
 }
 
-func initMediaRatingState(e *exec.Exec) map[string]string {
-	movieCount := common.MustInt(e.RunConfig, "media_movie_count")
+func initMediaRatingState(e workflowRuntime) map[string]string {
+	movieCount := common.MustInt(e.GetRunConfig(), "media_movie_count")
 	if movieCount <= 0 {
 		return map[string]string{}
 	}

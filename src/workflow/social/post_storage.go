@@ -1,10 +1,8 @@
 package socialworkflow
 
-import "aegean/components/exec"
-
 // PostStorage is the leaf service for post bodies. It either persists a post or
 // expands post IDs into full post payloads for timeline readers.
-func ExecuteRequestPostStorage(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestPostStorage(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 	_ = ndTimestamp
 

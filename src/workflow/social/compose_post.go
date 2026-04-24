@@ -1,9 +1,5 @@
 package socialworkflow
 
-import (
-	"aegean/components/exec"
-)
-
 const (
 	composeStageContextKey   = "social_compose_post_stage"
 	composePayloadContextKey = "social_compose_post_payload"
@@ -20,7 +16,7 @@ var composeNestedTargets = map[string][]string{
 // ComposePost is the top-level write workflow:
 // store the post body, append the author's user timeline, and fan the post out
 // into followers' home timelines.
-func ExecuteRequestComposePost(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestComposePost(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 
 	requestID := request["request_id"]
@@ -109,7 +105,7 @@ func validateComposeRequest(request map[string]any) map[string]any {
 	return nil
 }
 
-func dispatchComposeNestedRequests(e *exec.Exec, request map[string]any, post Post, ndTimestamp float64) {
+func dispatchComposeNestedRequests(e workflowRuntime, request map[string]any, post Post, ndTimestamp float64) {
 	parentRequestID := request["request_id"]
 	postIDs := []string{post.PostID}
 

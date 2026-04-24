@@ -1,9 +1,5 @@
 package socialworkflow
 
-import (
-	"aegean/components/exec"
-)
-
 const (
 	userTimelineStageContextKey   = "social_user_timeline_stage"
 	userTimelinePayloadContextKey = "social_user_timeline_payload"
@@ -15,7 +11,7 @@ var userTimelinePostStorageTargets = []string{"node4", "node5", "node6"}
 
 // UserTimeline stores each author's own recent post IDs and resolves them to
 // full posts on read via post_storage.
-func ExecuteRequestUserTimeline(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+func ExecuteRequestUserTimeline(e workflowRuntime, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
 	_ = ndSeed
 
 	requestID := request["request_id"]

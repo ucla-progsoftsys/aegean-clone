@@ -2,7 +2,6 @@ package hotelworkflow
 
 import (
 	"aegean/common"
-	"aegean/components/exec"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -149,9 +148,9 @@ func hotelNestedTargets(runConfig map[string]any, replicas []string) []string {
 	return append([]string{}, replicas...)
 }
 
-func hotelDispatchNestedRequest(e *exec.Exec, sourceRequest map[string]any, targets []string, outgoing map[string]any) {
-	selectedTargets := hotelNestedTargets(e.RunConfig, targets)
-	if common.BoolOrDefault(e.RunConfig, "hotel_nested_use_eo", false) {
+func hotelDispatchNestedRequest(e workflowRuntime, sourceRequest map[string]any, targets []string, outgoing map[string]any) {
+	selectedTargets := hotelNestedTargets(e.GetRunConfig(), targets)
+	if common.BoolOrDefault(e.GetRunConfig(), "hotel_nested_use_eo", false) {
 		e.DispatchNestedRequestEO(sourceRequest, selectedTargets, outgoing)
 		return
 	}

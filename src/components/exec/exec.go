@@ -146,6 +146,10 @@ type Exec struct {
 	ExecuteRequest ExecuteRequestFunc
 }
 
+func (e *Exec) GetRunConfig() map[string]any {
+	return e.RunConfig
+}
+
 func NewExec(name string, verifiers []string, peers []string, verifierCh chan<- map[string]any, shimCh chan<- map[string]any, verifyResponseQuorumSize int, executeRequest ExecuteRequestFunc, initStateFn InitStateFunc, runConfig map[string]any) *Exec {
 	if verifierCh == nil || shimCh == nil {
 		panic("exec component requires non-nil channels")

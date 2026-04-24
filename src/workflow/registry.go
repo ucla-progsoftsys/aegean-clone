@@ -51,56 +51,134 @@ var ExecWorkflows = map[string]exec.ExecuteRequestFunc{
 	"aegean_middle_diverge_2":  aegeanworkflow.ExecuteRequestMiddleDivergeTwoNode,
 	"aegean_middle_diverge_3":  aegeanworkflow.ExecuteRequestMiddleDivergeThreeNode,
 	"external_srv_server":      externalsrvworkflow.ExecuteRequestServer,
-	"hotel_frontend":           hotelworkflow.ExecuteRequestFrontend,
-	"hotel_search":             hotelworkflow.ExecuteRequestSearch,
-	"hotel_geo":                hotelworkflow.ExecuteRequestGeo,
-	"hotel_rate":               hotelworkflow.ExecuteRequestRate,
-	"hotel_profile":            hotelworkflow.ExecuteRequestProfile,
-	"hotel_recommendation":     hotelworkflow.ExecuteRequestRecommendation,
-	"hotel_user":               hotelworkflow.ExecuteRequestUser,
-	"hotel_reservation":        hotelworkflow.ExecuteRequestReservation,
-	"media_review_compose_api": mediaworkflow.ExecuteRequestReviewComposeAPI,
-	"media_user":               mediaworkflow.ExecuteRequestUser,
-	"media_movie_id":           mediaworkflow.ExecuteRequestMovieID,
-	"media_text":               mediaworkflow.ExecuteRequestText,
-	"media_unique_id":          mediaworkflow.ExecuteRequestUniqueID,
-	"media_rating":             mediaworkflow.ExecuteRequestRating,
-	"media_compose_review":     mediaworkflow.ExecuteRequestComposeReview,
-	"media_review_storage":     mediaworkflow.ExecuteRequestReviewStorage,
-	"media_user_review":        mediaworkflow.ExecuteRequestUserReview,
-	"media_movie_review":       mediaworkflow.ExecuteRequestMovieReview,
-	"req_race_middle":          reqraceworkflow.ExecuteRequestMiddle,
-	"req_race_backend_1":       reqraceworkflow.ExecuteRequestBackend1,
-	"req_race_backend_2":       reqraceworkflow.ExecuteRequestBackend2,
-	"req_race_backend_3":       reqraceworkflow.ExecuteRequestBackend3,
-	"social_compose_post":      socialworkflow.ExecuteRequestComposePost,
-	"social_post_storage":      socialworkflow.ExecuteRequestPostStorage,
-	"social_user_timeline":     socialworkflow.ExecuteRequestUserTimeline,
-	"social_home_timeline":     socialworkflow.ExecuteRequestHomeTimeline,
-	"social_social_graph":      socialworkflow.ExecuteRequestSocialGraph,
-	"supersimple_middle":       supersimpleworkflow.ExecuteRequestMiddle,
-	"supersimple_backend":      supersimpleworkflow.ExecuteRequestServer,
+	"hotel_frontend": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return hotelworkflow.ExecuteRequestFrontend(e, request, ndSeed, ndTimestamp)
+	},
+	"hotel_search": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return hotelworkflow.ExecuteRequestSearch(e, request, ndSeed, ndTimestamp)
+	},
+	"hotel_geo": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return hotelworkflow.ExecuteRequestGeo(e, request, ndSeed, ndTimestamp)
+	},
+	"hotel_rate": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return hotelworkflow.ExecuteRequestRate(e, request, ndSeed, ndTimestamp)
+	},
+	"hotel_profile": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return hotelworkflow.ExecuteRequestProfile(e, request, ndSeed, ndTimestamp)
+	},
+	"hotel_recommendation": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return hotelworkflow.ExecuteRequestRecommendation(e, request, ndSeed, ndTimestamp)
+	},
+	"hotel_user": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return hotelworkflow.ExecuteRequestUser(e, request, ndSeed, ndTimestamp)
+	},
+	"hotel_reservation": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return hotelworkflow.ExecuteRequestReservation(e, request, ndSeed, ndTimestamp)
+	},
+	"media_review_compose_api": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return mediaworkflow.ExecuteRequestReviewComposeAPI(e, request, ndSeed, ndTimestamp)
+	},
+	"media_user": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return mediaworkflow.ExecuteRequestUser(e, request, ndSeed, ndTimestamp)
+	},
+	"media_movie_id": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return mediaworkflow.ExecuteRequestMovieID(e, request, ndSeed, ndTimestamp)
+	},
+	"media_text": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return mediaworkflow.ExecuteRequestText(e, request, ndSeed, ndTimestamp)
+	},
+	"media_unique_id": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return mediaworkflow.ExecuteRequestUniqueID(e, request, ndSeed, ndTimestamp)
+	},
+	"media_rating": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return mediaworkflow.ExecuteRequestRating(e, request, ndSeed, ndTimestamp)
+	},
+	"media_compose_review": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return mediaworkflow.ExecuteRequestComposeReview(e, request, ndSeed, ndTimestamp)
+	},
+	"media_review_storage": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return mediaworkflow.ExecuteRequestReviewStorage(e, request, ndSeed, ndTimestamp)
+	},
+	"media_user_review": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return mediaworkflow.ExecuteRequestUserReview(e, request, ndSeed, ndTimestamp)
+	},
+	"media_movie_review": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return mediaworkflow.ExecuteRequestMovieReview(e, request, ndSeed, ndTimestamp)
+	},
+	"req_race_middle":    reqraceworkflow.ExecuteRequestMiddle,
+	"req_race_backend_1": reqraceworkflow.ExecuteRequestBackend1,
+	"req_race_backend_2": reqraceworkflow.ExecuteRequestBackend2,
+	"req_race_backend_3": reqraceworkflow.ExecuteRequestBackend3,
+	"social_compose_post": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return socialworkflow.ExecuteRequestComposePost(e, request, ndSeed, ndTimestamp)
+	},
+	"social_post_storage": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return socialworkflow.ExecuteRequestPostStorage(e, request, ndSeed, ndTimestamp)
+	},
+	"social_user_timeline": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return socialworkflow.ExecuteRequestUserTimeline(e, request, ndSeed, ndTimestamp)
+	},
+	"social_home_timeline": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return socialworkflow.ExecuteRequestHomeTimeline(e, request, ndSeed, ndTimestamp)
+	},
+	"social_social_graph": func(e *exec.Exec, request map[string]any, ndSeed int64, ndTimestamp float64) map[string]any {
+		return socialworkflow.ExecuteRequestSocialGraph(e, request, ndSeed, ndTimestamp)
+	},
+	"supersimple_middle":  supersimpleworkflow.ExecuteRequestMiddle,
+	"supersimple_backend": supersimpleworkflow.ExecuteRequestServer,
 }
 
 var InitStateWorkflows = map[string]exec.InitStateFunc{
 	"default":              aegeanworkflow.InitState,
 	"aegean_default":       aegeanworkflow.InitState,
 	"external_srv_default": externalsrvworkflow.InitState,
-	"hotel_default":        hotelworkflow.InitState,
-	"media_default":        mediaworkflow.InitState,
-	"req_race_default":     reqraceworkflow.InitState,
-	"social_default":       socialworkflow.InitState,
-	"supersimple_default":  supersimpleworkflow.InitState,
+	"hotel_default": func(e *exec.Exec) map[string]string {
+		return hotelworkflow.InitState(e)
+	},
+	"media_default": func(e *exec.Exec) map[string]string {
+		return mediaworkflow.InitState(e)
+	},
+	"req_race_default": reqraceworkflow.InitState,
+	"social_default": func(e *exec.Exec) map[string]string {
+		return socialworkflow.InitState(e)
+	},
+	"supersimple_default": supersimpleworkflow.InitState,
 }
 
 var UnreplicatedWorkflows = map[string]unreplicated.WorkflowFunc{
-	"aegean_backend": aegeanworkflow.ExecuteRequestBackendDirect,
-	"aegean_middle":  aegeanworkflow.ExecuteRequestMiddleDirect,
+	"aegean_backend":           aegeanworkflow.ExecuteRequestBackendDirect,
+	"aegean_middle":            aegeanworkflow.ExecuteRequestMiddleDirect,
+	"hotel_frontend":           hotelworkflow.ExecuteRequestFrontendDirect,
+	"hotel_search":             hotelworkflow.ExecuteRequestSearchDirect,
+	"hotel_geo":                hotelworkflow.ExecuteRequestGeoDirect,
+	"hotel_rate":               hotelworkflow.ExecuteRequestRateDirect,
+	"hotel_profile":            hotelworkflow.ExecuteRequestProfileDirect,
+	"hotel_recommendation":     hotelworkflow.ExecuteRequestRecommendationDirect,
+	"hotel_user":               hotelworkflow.ExecuteRequestUserDirect,
+	"hotel_reservation":        hotelworkflow.ExecuteRequestReservationDirect,
+	"social_compose_post":      socialworkflow.ExecuteRequestComposePostDirect,
+	"social_post_storage":      socialworkflow.ExecuteRequestPostStorageDirect,
+	"social_user_timeline":     socialworkflow.ExecuteRequestUserTimelineDirect,
+	"social_home_timeline":     socialworkflow.ExecuteRequestHomeTimelineDirect,
+	"social_social_graph":      socialworkflow.ExecuteRequestSocialGraphDirect,
+	"media_review_compose_api": mediaworkflow.ExecuteRequestReviewComposeAPIDirect,
+	"media_user":               mediaworkflow.ExecuteRequestUserDirect,
+	"media_movie_id":           mediaworkflow.ExecuteRequestMovieIDDirect,
+	"media_text":               mediaworkflow.ExecuteRequestTextDirect,
+	"media_unique_id":          mediaworkflow.ExecuteRequestUniqueIDDirect,
+	"media_rating":             mediaworkflow.ExecuteRequestRatingDirect,
+	"media_compose_review":     mediaworkflow.ExecuteRequestComposeReviewDirect,
+	"media_review_storage":     mediaworkflow.ExecuteRequestReviewStorageDirect,
+	"media_user_review":        mediaworkflow.ExecuteRequestUserReviewDirect,
+	"media_movie_review":       mediaworkflow.ExecuteRequestMovieReviewDirect,
 }
 
 var UnreplicatedInitStateWorkflows = map[string]unreplicated.InitStateFunc{
 	"default":        aegeanworkflow.InitStateDirect,
 	"aegean_default": aegeanworkflow.InitStateDirect,
+	"hotel_default":  hotelworkflow.InitStateDirect,
+	"media_default":  mediaworkflow.InitStateDirect,
+	"social_default": socialworkflow.InitStateDirect,
 }
 
 var ExternalServiceInitWorkflows = map[string]func(es *nodes.ExternalService){
