@@ -81,6 +81,24 @@ func main() {
 			panic(fmt.Sprintf("unknown init state workflow %q for node %s", initStateWorkflow, *name))
 		}
 		node = nodes.NewServer(*name, *host, *port, cfg.Clients, cfg.Nodes, cfg.IsPrimaryBatcher, cfg.ShimQuorumSize, cfg.VerifyResponseQuorumSize, cfg.ExecVerifyQuorumSize, cfg.PhaseQuorumSize, cfg.ExpectedExecVotes, execFn, initFn, nodeRunConfig)
+	case "unreplicated_server":
+		execWorkflow := cfg.ExecWorkflow
+		if execWorkflow == "" {
+			execWorkflow = "default"
+		}
+		execFn := workflow.UnreplicatedWorkflows[execWorkflow]
+		if execFn == nil {
+			panic(fmt.Sprintf("unknown exec workflow %q for node %s", execWorkflow, *name))
+		}
+		initStateWorkflow := cfg.InitStateWorkflow
+		if initStateWorkflow == "" {
+			initStateWorkflow = "default"
+		}
+		initFn := workflow.UnreplicatedInitStateWorkflows[initStateWorkflow]
+		if initFn == nil {
+			panic(fmt.Sprintf("unknown init state workflow %q for node %s", initStateWorkflow, *name))
+		}
+		node = nodes.NewUnreplicatedServer(*name, *host, *port, cfg.Clients, execFn, initFn, nodeRunConfig)
 	case "external_service":
 		serviceInitWorkflow := cfg.ExternalServiceInitState
 		if serviceInitWorkflow == "" {

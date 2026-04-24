@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"aegean/components/exec"
+	"aegean/components/unreplicated"
 	"aegean/nodes"
 	aegeanworkflow "aegean/workflow/aegean"
 	externalsrvworkflow "aegean/workflow/external_srv"
@@ -90,6 +91,16 @@ var InitStateWorkflows = map[string]exec.InitStateFunc{
 	"req_race_default":     reqraceworkflow.InitState,
 	"social_default":       socialworkflow.InitState,
 	"supersimple_default":  supersimpleworkflow.InitState,
+}
+
+var UnreplicatedWorkflows = map[string]unreplicated.WorkflowFunc{
+	"aegean_backend": aegeanworkflow.ExecuteRequestBackendDirect,
+	"aegean_middle":  aegeanworkflow.ExecuteRequestMiddleDirect,
+}
+
+var UnreplicatedInitStateWorkflows = map[string]unreplicated.InitStateFunc{
+	"default":        aegeanworkflow.InitStateDirect,
+	"aegean_default": aegeanworkflow.InitStateDirect,
 }
 
 var ExternalServiceInitWorkflows = map[string]func(es *nodes.ExternalService){
