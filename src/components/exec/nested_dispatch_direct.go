@@ -17,6 +17,10 @@ func (e *Exec) DispatchNestedRequestDirect(sourceRequest map[string]any, targets
 	sendNestedRequestDirect(targets, prepared)
 }
 
+func (e *Exec) PrepareNestedRequestPayload(sourceRequest map[string]any, outgoing map[string]any) (map[string]any, bool) {
+	return e.prepareNestedDispatchPayload(sourceRequest, outgoing)
+}
+
 func (e *Exec) prepareNestedDispatchPayload(sourceRequest map[string]any, outgoing map[string]any) (map[string]any, bool) {
 	if outgoing == nil {
 		return nil, false

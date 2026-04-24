@@ -70,6 +70,13 @@ func (e *Exec) DispatchNestedRequestEO(sourceRequest map[string]any, targets []s
 	}
 }
 
+func (e *Exec) ClaimNestedRequestEO(prepared map[string]any) bool {
+	if prepared == nil || e.nestedEO == nil {
+		return false
+	}
+	return e.nextEODispatchAction(prepared) == eoDispatchSendDirect
+}
+
 func (e *Exec) HandleNestedResponseMessage(payload map[string]any) (map[string]any, bool) {
 	requestID, state, ok := e.nestedResponseState(payload)
 	if !ok {

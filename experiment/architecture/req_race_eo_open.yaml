@@ -1,0 +1,126 @@
+---
+services:
+  client:
+    type: client
+    next:
+    - node1
+    - node2
+    - node3
+    client_workflow: req_race_k6_open_client
+  middle:
+    type: server
+    clients:
+    - node0
+    nodes:
+    - node1
+    - node2
+    - node3
+    exec_workflow: req_race_middle
+    init_state_workflow: req_race_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 40
+      batch_timeout_ms: 20
+  backend_1:
+    type: server
+    clients:
+    - node1
+    - node2
+    - node3
+    nodes:
+    - node4
+    - node5
+    - node6
+    exec_workflow: req_race_backend_1
+    init_state_workflow: req_race_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 20
+      batch_timeout_ms: 10
+  backend_2:
+    type: server
+    clients:
+    - node1
+    - node2
+    - node3
+    nodes:
+    - node7
+    - node8
+    - node9
+    exec_workflow: req_race_backend_2
+    init_state_workflow: req_race_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 20
+      batch_timeout_ms: 10
+  backend_3:
+    type: server
+    clients:
+    - node1
+    - node2
+    - node3
+    nodes:
+    - node10
+    - node11
+    - node12
+    exec_workflow: req_race_backend_3
+    init_state_workflow: req_race_default
+    shimQuorumSize: 1
+    verifyResponseQuorumSize: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
+    batcher_config:
+      batch_size: 20
+      batch_timeout_ms: 10
+nodes:
+  node0:
+    service: client
+  node1:
+    service: middle
+    is_primary_batcher: true
+  node2:
+    service: middle
+    is_primary_batcher: false
+  node3:
+    service: middle
+    is_primary_batcher: false
+  node4:
+    service: backend_1
+    is_primary_batcher: true
+  node5:
+    service: backend_1
+    is_primary_batcher: false
+  node6:
+    service: backend_1
+    is_primary_batcher: false
+  node7:
+    service: backend_2
+    is_primary_batcher: true
+  node8:
+    service: backend_2
+    is_primary_batcher: false
+  node9:
+    service: backend_2
+    is_primary_batcher: false
+  node10:
+    service: backend_3
+    is_primary_batcher: true
+  node11:
+    service: backend_3
+    is_primary_batcher: false
+  node12:
+    service: backend_3
+    is_primary_batcher: false

@@ -1,0 +1,14 @@
+---
+architecture: req_race_open.yaml
+
+# K6 configs
+k6_qps: 1600
+duration: 15s
+k6_pre_allocated_vus: 0
+k6_max_vus: 10000
+
+# Run & system configs
+run_timeout_seconds: 20
+parallel_window_k: 4
+worker_count: 4
+gomaxprocs: 4

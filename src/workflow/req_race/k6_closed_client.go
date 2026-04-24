@@ -39,6 +39,35 @@ func K6ClosedClientRequestLogic(c *nodes.Client) {
 	}
 }
 
+func K6OpenClientRequestLogic(c *nodes.Client) {
+	duration := common.MustString(c.RunConfig, "duration")
+	runTimeoutSeconds := common.MustInt(c.RunConfig, "run_timeout_seconds")
+	k6QPS := common.MustInt(c.RunConfig, "k6_qps")
+	k6PreAllocatedVUs := common.MustInt(c.RunConfig, "k6_pre_allocated_vus")
+	k6MaxVUs := common.MustInt(c.RunConfig, "k6_max_vus")
+	k6CommandDeadline := time.Duration(runTimeoutSeconds) * time.Second
+
+	c.WaitForNodesReady(c.ReadyNodes)
+	k6TargetURL := fmt.Sprintf("http://%s:8000/", c.Name)
+
+	if err := runK6Open(k6OpenRunConfig{
+		rate:            k6QPS,
+		duration:        duration,
+		preAllocatedVUs: k6PreAllocatedVUs,
+		maxVUs:          k6MaxVUs,
+		targetURL:       k6TargetURL,
+		deadline:        k6CommandDeadline,
+		sender:          c.Name,
+		scriptPath:      "workflow/req_race/k6_open_client.js",
+	}); err != nil {
+		if err == context.DeadlineExceeded {
+			log.Printf("k6 open client request logic timed out after %s", k6CommandDeadline)
+			return
+		}
+		log.Printf("k6 open client request logic failed: %v", err)
+	}
+}
+
 type k6RunConfig struct {
 	duration   string
 	targetURL  string
@@ -46,6 +75,18 @@ type k6RunConfig struct {
 	sender     string
 	scriptPath string
 	extraEnv   []string
+}
+
+type k6OpenRunConfig struct {
+	rate            int
+	duration        string
+	preAllocatedVUs int
+	maxVUs          int
+	targetURL       string
+	deadline        time.Duration
+	sender          string
+	scriptPath      string
+	extraEnv        []string
 }
 
 func runK6(config k6RunConfig) error {
@@ -57,6 +98,38 @@ func runK6(config k6RunConfig) error {
 		"-e", "TARGET_URL=" + config.targetURL,
 		"-e", "SENDER=" + config.sender,
 		"-e", "DURATION=" + config.duration,
+	}
+	for _, envVar := range config.extraEnv {
+		args = append(args, "-e", envVar)
+	}
+	args = append(args, config.scriptPath)
+
+	cmd := exec.CommandContext(ctx, "k6", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return ctx.Err()
+		}
+		return fmt.Errorf("run k6: %w", err)
+	}
+
+	return nil
+}
+
+func runK6Open(config k6OpenRunConfig) error {
+	ctx, cancel := context.WithTimeout(context.Background(), config.deadline)
+	defer cancel()
+
+	args := []string{
+		"run",
+		"-e", "REQ_RACE_TARGET_URL=" + config.targetURL,
+		"-e", "REQ_RACE_SENDER=" + config.sender,
+		"-e", "REQ_RACE_RATE=" + strconv.Itoa(config.rate),
+		"-e", "REQ_RACE_DURATION=" + config.duration,
+		"-e", "REQ_RACE_PRE_ALLOCATED_VUS=" + strconv.Itoa(config.preAllocatedVUs),
+		"-e", "REQ_RACE_MAX_VUS=" + strconv.Itoa(config.maxVUs),
 	}
 	for _, envVar := range config.extraEnv {
 		args = append(args, "-e", envVar)
