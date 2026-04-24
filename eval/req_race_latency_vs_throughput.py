@@ -27,6 +27,7 @@ def main() -> None:
         series_specs=[
             SeriesSpec("Direct", args.results_root / "req_race"),
             SeriesSpec("EO", args.results_root / "req_race_eo"),
+            SeriesSpec("Unreplicated", args.results_root / "req_race_unreplicated"),
         ],
     )
     print(f"Wrote {output_path}")

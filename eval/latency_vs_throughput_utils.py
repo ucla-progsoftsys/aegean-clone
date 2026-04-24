@@ -29,13 +29,18 @@ def humanize_workload_name(workload_name: str) -> str:
 
 
 def series_label(series_dir: Path, workload_name: str) -> str:
-    return "EO" if series_dir.name == f"{workload_name}_eo" else "Baseline"
+    if series_dir.name == f"{workload_name}_eo":
+        return "EO"
+    if series_dir.name == f"{workload_name}_unreplicated":
+        return "Unreplicated"
+    return "Direct"
 
 
 def existing_series_dirs(results_root: Path, workload_name: str) -> list[Path]:
     candidates = [
         results_root / workload_name,
         results_root / f"{workload_name}_eo",
+        results_root / f"{workload_name}_unreplicated",
     ]
     return [path for path in candidates if path.is_dir()]
 

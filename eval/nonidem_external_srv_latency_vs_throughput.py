@@ -27,6 +27,7 @@ def main() -> None:
         series_specs=[
             SeriesSpec("Direct", args.results_root / "nonidem_external_srv"),
             SeriesSpec("EO", args.results_root / "nonidem_external_srv_eo"),
+            SeriesSpec("Unreplicated", args.results_root / "nonidem_external_srv_unreplicated"),
         ],
     )
     print(f"Wrote {output_path}")
