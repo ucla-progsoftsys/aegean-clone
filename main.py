@@ -379,6 +379,37 @@ def wait_for_nodes_ready(node_names, timeout=30.0, poll_interval=1.0):
     return False
 
 
+def get_client_status(node_name):
+    payload = _remote_rpc(node_name, "/status", timeout=5)
+    return {
+        "request_logic_started": bool(payload.get("request_logic_started", False)),
+        "request_logic_completed": bool(payload.get("request_logic_completed", False)),
+    }
+
+
+def wait_for_clients_complete(client_names, timeout=30.0, poll_interval=1.0):
+    if not client_names:
+        return True
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        all_completed = True
+        for name in client_names:
+            try:
+                status = get_client_status(name)
+                if not status["request_logic_completed"]:
+                    all_completed = False
+            except Exception as exc:  # noqa: BLE001
+                logger.info("Client %s status unavailable yet: %s", name, exc)
+                all_completed = False
+
+        if all_completed:
+            return True
+        time.sleep(poll_interval)
+
+    return False
+
+
 def _parse_k6_duration(value_str, unit_str):
     """Convert a k6 duration value+unit to seconds."""
     v = float(value_str)
@@ -523,11 +554,32 @@ def run_experiment(config_path, enable_pprof=False, enable_tracing=False, timest
     if not all_nodes_ready:
         logger.warning("Node readiness timeout after 120s; proceeding anyway")
 
-    logger.info("Waiting for run timeout: %ss", run_timeout_seconds)
     run_start = time.monotonic()
-    time.sleep(run_timeout_seconds)
-    run_duration_seconds = max(0.0, time.monotonic() - run_start)
-    logger.info("Run timeout reached after %.2fs", run_duration_seconds)
+    if client_names:
+        client_wait_timeout = max(30.0, float(run_timeout_seconds) * 2.0)
+        logger.info(
+            "Waiting for %d client(s) to finish request logic (safety timeout %.0fs)",
+            len(client_names),
+            client_wait_timeout,
+        )
+        all_clients_completed = wait_for_clients_complete(
+            client_names,
+            timeout=client_wait_timeout,
+            poll_interval=1.0,
+        )
+        run_duration_seconds = max(0.0, time.monotonic() - run_start)
+        if all_clients_completed:
+            logger.info("All clients finished after %.2fs", run_duration_seconds)
+        else:
+            logger.warning(
+                "Timed out waiting for clients after %.2fs; stopping experiment anyway",
+                run_duration_seconds,
+            )
+    else:
+        logger.info("No client nodes found; falling back to run timeout: %ss", run_timeout_seconds)
+        time.sleep(run_timeout_seconds)
+        run_duration_seconds = max(0.0, time.monotonic() - run_start)
+        logger.info("Run timeout reached after %.2fs", run_duration_seconds)
 
     stop_docker_nodes(node_names)
     time.sleep(3)  # wait for ports to be released before next run

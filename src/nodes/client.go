@@ -15,17 +15,19 @@ import (
 
 type Client struct {
 	*Node
-	Next                []string
-	ReadyNodes          []string
-	completedRequests   map[string]struct{}
-	pending             map[string]chan map[string]any
-	mu                  sync.Mutex
-	cond                *sync.Cond
-	requestSeq          uint64
-	finalResponseQuorum *common.QuorumHelper
-	clientType          string
-	RequestLogic        func(c *Client)
-	RunConfig           map[string]any
+	Next                  []string
+	ReadyNodes            []string
+	completedRequests     map[string]struct{}
+	pending               map[string]chan map[string]any
+	mu                    sync.Mutex
+	cond                  *sync.Cond
+	requestSeq            uint64
+	finalResponseQuorum   *common.QuorumHelper
+	clientType            string
+	RequestLogic          func(c *Client)
+	RunConfig             map[string]any
+	requestLogicStarted   atomic.Bool
+	requestLogicCompleted atomic.Bool
 }
 
 func NewClient(name, host string, port int, next []string, readyNodes []string, runConfig map[string]any, clientType string, requestLogic func(c *Client)) *Client {
@@ -46,12 +48,15 @@ func NewClient(name, host string, port int, next []string, readyNodes []string, 
 	client.cond = sync.NewCond(&client.mu)
 	client.Node.HandleMessage = client.HandleMessage
 	client.Node.HandleReady = client.HandleReady
+	client.Node.HandleStatus = client.HandleStatus
 	return client
 }
 
 func (c *Client) Start() {
 	go func() {
 		c.WaitForNodesReady([]string{c.Name})
+		c.requestLogicStarted.Store(true)
+		defer c.requestLogicCompleted.Store(true)
 		c.RequestLogic(c)
 	}()
 	c.Node.Start()
@@ -220,6 +225,14 @@ func (c *Client) WaitForNodesReady(nodeNames []string) {
 func (c *Client) HandleReady(payload map[string]any) map[string]any {
 	return map[string]any{
 		"ready": true,
+	}
+}
+
+func (c *Client) HandleStatus(payload map[string]any) map[string]any {
+	return map[string]any{
+		"ready":                   true,
+		"request_logic_started":   c.requestLogicStarted.Load(),
+		"request_logic_completed": c.requestLogicCompleted.Load(),
 	}
 }
 

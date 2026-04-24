@@ -18,6 +18,8 @@ type Node struct {
 	HandleMessage netx.MessageHandler
 	// HandleReady is mounted on /ready and mirrors HandleMessage semantics.
 	HandleReady netx.MessageHandler
+	// HandleStatus is mounted on /status for node-specific status probes.
+	HandleStatus netx.MessageHandler
 }
 
 func NewNode(name, host string, port int) *Node {
@@ -44,6 +46,9 @@ func (n *Node) Start() {
 	}
 	if n.HandleReady != nil {
 		handlers["/ready"] = n.HandleReady
+	}
+	if n.HandleStatus != nil {
+		handlers["/status"] = n.HandleStatus
 	}
 
 	listener, err := net.Listen("tcp", addr)
