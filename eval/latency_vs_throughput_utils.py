@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Iterable
 
 try:
@@ -19,9 +20,13 @@ DEFAULT_FILENAME = "latency_vs_throughput.png"
 
 @dataclass(frozen=True)
 class MetricPoint:
+    offered_qps: int
     throughput: float
     median_ms: float
     p90_ms: float
+
+
+QPS_DIR_RE = re.compile(r"qps_(\d+)$")
 
 
 def humanize_workload_name(workload_name: str) -> str:
@@ -45,16 +50,37 @@ def existing_series_dirs(results_root: Path, workload_name: str) -> list[Path]:
     return [path for path in candidates if path.is_dir()]
 
 
-def load_series_points(series_dir: Path) -> list[MetricPoint]:
+def load_series_points(
+    series_dir: Path,
+    *,
+    min_offered_qps: int | None = None,
+    max_offered_qps: int | None = None,
+    min_throughput: float | None = None,
+    max_throughput: float | None = None,
+    drop_collapse_tolerance: float | None = None,
+) -> list[MetricPoint]:
     points: list[MetricPoint] = []
 
     for log_path in sorted(series_dir.glob("qps_*/node0.log")):
+        qps_match = QPS_DIR_RE.match(log_path.parent.name)
+        if not qps_match:
+            continue
+        offered_qps = int(qps_match.group(1))
+        if min_offered_qps is not None and offered_qps < min_offered_qps:
+            continue
+        if max_offered_qps is not None and offered_qps > max_offered_qps:
+            continue
         try:
             throughput, median_ms, p90_ms = parse_metrics_log(log_path)
         except ValueError:
             continue
+        if min_throughput is not None and throughput < min_throughput:
+            continue
+        if max_throughput is not None and throughput > max_throughput:
+            continue
         points.append(
             MetricPoint(
+                offered_qps=offered_qps,
                 throughput=throughput,
                 median_ms=median_ms,
                 p90_ms=p90_ms,
@@ -63,6 +89,17 @@ def load_series_points(series_dir: Path) -> list[MetricPoint]:
 
     if not points:
         raise ValueError(f"No complete client logs found under {series_dir}")
+
+    points.sort(key=lambda point: point.offered_qps)
+    if drop_collapse_tolerance is not None:
+        filtered: list[MetricPoint] = []
+        peak_throughput = 0.0
+        for point in points:
+            if peak_throughput > 0 and point.throughput < peak_throughput * drop_collapse_tolerance:
+                continue
+            filtered.append(point)
+            peak_throughput = max(peak_throughput, point.throughput)
+        points = filtered
 
     points.sort(key=lambda point: point.throughput)
     return points
@@ -125,8 +162,29 @@ def generate_workload_plot(
     *,
     results_root: Path = DEFAULT_RESULTS_ROOT,
     filename: str = DEFAULT_FILENAME,
+    min_offered_qps: int | None = None,
+    max_offered_qps: int | None = None,
+    min_throughput: float | None = None,
+    max_throughput: float | None = None,
+    drop_collapse_tolerance: float | None = None,
 ) -> Path:
-    series = collect_series(results_root, workload_name)
+    series: dict[str, list[MetricPoint]] = {}
+    for series_dir in existing_series_dirs(results_root, workload_name):
+        try:
+            points = load_series_points(
+                series_dir,
+                min_offered_qps=min_offered_qps,
+                max_offered_qps=max_offered_qps,
+                min_throughput=min_throughput,
+                max_throughput=max_throughput,
+                drop_collapse_tolerance=drop_collapse_tolerance,
+            )
+        except ValueError:
+            continue
+        if points:
+            series[series_label(series_dir, workload_name)] = points
+    if not series:
+        raise ValueError(f"No complete result sets found for {workload_name}")
     output_path = output_path_for(results_root, workload_name, filename)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plot_latency_vs_throughput(
