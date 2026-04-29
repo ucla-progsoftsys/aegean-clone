@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 
 
 BEGIN_MARKER = "# BEGIN AEGEAN NODE CONFIG"
 END_MARKER = "# END AEGEAN NODE CONFIG"
-REMOTE_REPO_PATH = "/app"
 SOURCE_FILES = {
     "docker": "docker_nodes",
     "distributed": "distributed_nodes",
@@ -78,11 +78,51 @@ def render_snippet(mode: str, source_text: str) -> str:
     return "\n\n".join(blocks)
 
 
+def shell_quote(script: str) -> str:
+    return shlex.quote(script)
+
+
+def build_remote_sync_command(block: str) -> str:
+    script = f"""
+set -euo pipefail
+target="$HOME/.ssh/config"
+mkdir -p "$(dirname "$target")"
+tmp="$(mktemp)"
+cleanup() {{
+  rm -f "$tmp"
+}}
+trap cleanup EXIT
+
+if [ -f "$target" ]; then
+  awk -v begin={shell_quote(BEGIN_MARKER)} -v end={shell_quote(END_MARKER)} '
+    $0 == begin {{ skip = 1; next }}
+    $0 == end {{ skip = 0; next }}
+    !skip {{ print }}
+  ' "$target" > "$tmp"
+else
+  : > "$tmp"
+fi
+
+if [ -s "$tmp" ]; then
+  printf '\\n\\n' >> "$tmp"
+fi
+
+cat <<'EOF_BLOCK' >> "$tmp"
+{block.rstrip()}
+EOF_BLOCK
+printf '\\n' >> "$tmp"
+mv "$tmp" "$target"
+"""
+    return f"bash -lc {shell_quote(script)}"
+
+
 def sync_remote_nodes(mode: str, source_text: str) -> int:
     if mode != "distributed":
         return 0
 
-    script_path = f"{REMOTE_REPO_PATH}/setup/ssh_config.py"
+    snippet = render_snippet(mode, source_text)
+    block = f"{BEGIN_MARKER}\n{snippet}\n{END_MARKER}\n"
+    remote_command = build_remote_sync_command(block)
     failures = []
     for name, hostname in parse_nodes(source_text):
         result = subprocess.run(
@@ -95,10 +135,7 @@ def sync_remote_nodes(mode: str, source_text: str) -> int:
                 "-o",
                 "LogLevel=ERROR",
                 f"gjl@{hostname}",
-                "python3",
-                script_path,
-                mode,
-                "--local-only",
+                remote_command,
             ],
             check=False,
         )

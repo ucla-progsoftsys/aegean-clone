@@ -6,3 +6,10 @@ What improved system performance
 5. Disabling OpenTelemtry/lots of logging during test time
 6. Having middle service fan out to only the primary batcher of the backend service
 7. If you have a mac, have it be charging
+
+To use distributed:
+1. Updated distributed_nodes
+2. python setup/ssh_config.py distributed
+3. python setup/hosts.py distributed
+4. python setup/install.py [# of nodes]
+5. python setup/repo.py [# of nodes]

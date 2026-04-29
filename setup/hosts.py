@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from pathlib import Path
+import shlex
 import socket
 import subprocess
 import sys
@@ -8,7 +9,6 @@ import sys
 
 BEGIN_MARKER = "# BEGIN AEGEAN NODE HOSTS"
 END_MARKER = "# END AEGEAN NODE HOSTS"
-REMOTE_REPO_PATH = "/app"
 TARGET = Path("/etc/hosts")
 DOCKER_SUBNET_PREFIX = "10.0.0."
 DOCKER_BASE_OCTET = 10
@@ -94,12 +94,54 @@ def write_hosts(updated: str) -> None:
         raise RuntimeError(f"failed to update {TARGET} via sudo")
 
 
-def sync_remote_nodes(mode: str) -> int:
+def shell_quote(script: str) -> str:
+    return shlex.quote(script)
+
+
+def build_remote_sync_command(block: str) -> str:
+    script = f"""
+set -euo pipefail
+target=/etc/hosts
+tmp="$(mktemp)"
+cleanup() {{
+  rm -f "$tmp"
+}}
+trap cleanup EXIT
+
+if [ "$(id -u)" -eq 0 ]; then
+  SUDO=""
+elif command -v sudo >/dev/null 2>&1; then
+  SUDO="sudo"
+else
+  echo "sudo is required when not connected as root" >&2
+  exit 1
+fi
+
+$SUDO awk -v begin={shell_quote(BEGIN_MARKER)} -v end={shell_quote(END_MARKER)} '
+  $0 == begin {{ skip = 1; next }}
+  $0 == end {{ skip = 0; next }}
+  !skip {{ print }}
+' "$target" > "$tmp"
+
+if [ -s "$tmp" ]; then
+  printf '\\n\\n' >> "$tmp"
+fi
+
+cat <<'EOF_BLOCK' >> "$tmp"
+{block.rstrip()}
+EOF_BLOCK
+printf '\\n' >> "$tmp"
+$SUDO cp "$tmp" "$target"
+"""
+    return f"bash -lc {shell_quote(script)}"
+
+
+def sync_remote_nodes(mode: str, block: str) -> int:
     if mode != "distributed":
         return 0
 
     source_text = (Path(__file__).resolve().parent / SOURCE_FILES[mode]).read_text()
-    script_path = f"{REMOTE_REPO_PATH}/setup/hosts.py"
+    remote_command = build_remote_sync_command(block)
     failures = []
     for name, hostname in parse_nodes(source_text):
         result = subprocess.run(
@@ -112,10 +154,7 @@ def sync_remote_nodes(mode: str) -> int:
                 "-o",
                 "LogLevel=ERROR",
                 f"gjl@{hostname}",
-                "python3",
-                script_path,
-                mode,
-                "--local-only",
+                remote_command,
             ],
             check=False,
         )
@@ -174,7 +213,7 @@ def main() -> int:
     print(f"Updated {TARGET} with {mode} config")
 
     if not local_only:
-        return sync_remote_nodes(mode)
+        return sync_remote_nodes(mode, block)
 
     return 0
 
