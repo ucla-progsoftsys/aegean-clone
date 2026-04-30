@@ -101,7 +101,6 @@ def load_series_points(
             peak_throughput = max(peak_throughput, point.throughput)
         points = filtered
 
-    points.sort(key=lambda point: point.throughput)
     return points
 
 
