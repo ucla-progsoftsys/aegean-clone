@@ -7,6 +7,7 @@ import re
 import shlex
 import statistics
 import subprocess
+import tempfile
 import time
 from datetime import datetime
 
@@ -26,6 +27,9 @@ DEFAULT_REMOTE_CPU_PROFILE_PATH = "/tmp/cpu.pprof"
 DEFAULT_REMOTE_BLOCK_PROFILE_PATH = "/tmp/block.pprof"
 DEFAULT_REMOTE_MUTEX_PROFILE_PATH = "/tmp/mutex.pprof"
 DEFAULT_REMOTE_OTEL_TRACE_PATH = "/tmp/otel-traces.json"
+
+BINARY_SOURCE_NODE = None
+BINARY_READY_NODES = set()
 
 HOTEL_LOCAL_REDIS_SERVICES = {
     "geo",
@@ -126,6 +130,10 @@ def load_experiment_topology(architecture_path):
 
 def _scp(node_name, remote_path, local_path):
     return subprocess.run(["scp", *_ssh_options(), f"{node_name}:{remote_path}", local_path], check=False)
+
+
+def _scp_to(local_path, node_name, remote_path):
+    return subprocess.run(["scp", *_ssh_options(), local_path, f"{node_name}:{remote_path}"], check=False)
 
 
 def list_run_config_paths(runs_dir=None):
@@ -235,7 +243,7 @@ def _remote_rpc(node_name, path, payload=None, timeout=5):
 
 
 def build_binary(build_node):
-    logger.info("Building shared binary on %s", build_node)
+    logger.info("Building binary on %s", build_node)
     result = _ssh_shell(
         build_node,
         (
@@ -248,6 +256,47 @@ def build_binary(build_node):
     )
     if result.returncode != 0:
         raise RuntimeError(f"failed to build shared binary on {build_node}")
+
+
+def distribute_binary(build_node, node_names):
+    targets = [name for name in node_names if name != build_node]
+    if not targets:
+        return
+
+    logger.info("Distributing binary from %s to %d node(s)", build_node, len(targets))
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        local_binary = os.path.join(tmp_dir, "aegean-node")
+        result = _scp(build_node, REMOTE_BINARY_PATH, local_binary)
+        if result.returncode != 0:
+            raise RuntimeError(f"failed to copy binary from {build_node}")
+
+        for name in targets:
+            result = _ssh_shell(name, "mkdir -p /app/bin")
+            if result.returncode != 0:
+                raise RuntimeError(f"failed to create binary directory on {name}")
+            result = _scp_to(local_binary, name, REMOTE_BINARY_PATH)
+            if result.returncode != 0:
+                raise RuntimeError(f"failed to copy binary to {name}")
+            result = _ssh_shell(name, f"chmod +x {shlex.quote(REMOTE_BINARY_PATH)}")
+            if result.returncode != 0:
+                raise RuntimeError(f"failed to mark binary executable on {name}")
+
+
+def ensure_binaries_ready(node_names):
+    global BINARY_SOURCE_NODE
+
+    missing_nodes = [name for name in node_names if name not in BINARY_READY_NODES]
+    if not missing_nodes:
+        logger.info("Binary already available on %d node(s); skipping build", len(node_names))
+        return
+
+    if BINARY_SOURCE_NODE is None:
+        BINARY_SOURCE_NODE = node_names[0]
+        build_binary(BINARY_SOURCE_NODE)
+        BINARY_READY_NODES.add(BINARY_SOURCE_NODE)
+
+    distribute_binary(BINARY_SOURCE_NODE, missing_nodes)
+    BINARY_READY_NODES.update(missing_nodes)
 
 
 def node_local_redis_env(run_config, service_name):
@@ -280,8 +329,8 @@ def node_local_redis_env(run_config, service_name):
 
 def launch_nodes(node_names, node_services, config_path, run_config, enable_pprof=False, enable_tracing=False):
     logger.info("Launching %d nodes", len(node_names))
-    for name in node_names:
-        build_binary(name)
+    if node_names:
+        ensure_binaries_ready(node_names)
 
     remote_config_path = shlex.quote(f"../{config_path}")
     profiled_node = os.environ.get("AEGEAN_PROFILE_NODE", "").strip()

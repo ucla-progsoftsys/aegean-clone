@@ -13,4 +13,7 @@ To use distributed:
 3. python setup/hosts.py distributed
 4. python setup/install.py [# of nodes]
 5. python setup/repo.py [# of nodes] [optionally --upload]
-6. 
+
+To use docker:
+1. python setup/ssh_config.py docker
+2. python setup/hosts.py docker
