@@ -26,10 +26,10 @@ type raftConsensusBox struct {
 	peerIDs map[string]uint64
 	peers   map[uint64]string
 	send    SendRaftFunc
-	commit  CommitFunc
+	learn   LearnFunc
 
-	leaderID      atomic.Uint64
-	committedSlot uint64
+	leaderID    atomic.Uint64
+	learnedSlot uint64
 
 	proposals chan proposalRequest
 	steps     chan raftpb.Message
@@ -38,7 +38,7 @@ type raftConsensusBox struct {
 	doneCh    chan struct{}
 }
 
-func newRaftConsensusBox(cfg BoxConfig, onCommit CommitFunc) (ConsensusBox, error) {
+func newRaftConsensusBox(cfg BoxConfig, onLearn LearnFunc) (ConsensusBox, error) {
 	peerIDs, peers, selfID, err := buildPeerIDs(cfg.Name, cfg.Peers)
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func newRaftConsensusBox(cfg BoxConfig, onCommit CommitFunc) (ConsensusBox, erro
 		peerIDs:   peerIDs,
 		peers:     peers,
 		send:      cfg.SendRaft,
-		commit:    onCommit,
+		learn:     onLearn,
 		proposals: make(chan proposalRequest),
 		steps:     make(chan raftpb.Message, 1024),
 		stopCh:    make(chan struct{}),
@@ -114,17 +114,27 @@ func newRaftConsensusBox(cfg BoxConfig, onCommit CommitFunc) (ConsensusBox, erro
 	return box, nil
 }
 
-func (b *raftConsensusBox) IsPrimary() bool {
+func (b *raftConsensusBox) IsLeader() bool {
 	return b.leaderID.Load() == b.selfID && b.selfID != 0
 }
 
-func (b *raftConsensusBox) Primary() (string, bool) {
+// IsPrimary is kept as a compatibility alias for older callers.
+func (b *raftConsensusBox) IsPrimary() bool {
+	return b.IsLeader()
+}
+
+func (b *raftConsensusBox) Leader() (string, bool) {
 	leaderID := b.leaderID.Load()
 	if leaderID == 0 {
 		return "", false
 	}
 	peer, ok := b.peers[leaderID]
 	return peer, ok
+}
+
+// Primary is kept as a compatibility alias for older callers.
+func (b *raftConsensusBox) Primary() (string, bool) {
+	return b.Leader()
 }
 
 func (b *raftConsensusBox) Propose(entry Entry) error {
@@ -223,14 +233,14 @@ func (b *raftConsensusBox) drainReady(rawNode *raft.RawNode, storage *raft.Memor
 		}
 
 		for _, entry := range ready.CommittedEntries {
-			b.applyCommittedEntry(rawNode, entry)
+			b.learnCommittedEntry(rawNode, entry)
 		}
 
 		rawNode.Advance(ready)
 	}
 }
 
-func (b *raftConsensusBox) applyCommittedEntry(rawNode *raft.RawNode, entry raftpb.Entry) {
+func (b *raftConsensusBox) learnCommittedEntry(rawNode *raft.RawNode, entry raftpb.Entry) {
 	switch entry.Type {
 	case raftpb.EntryConfChange:
 		if len(entry.Data) == 0 {
@@ -256,9 +266,9 @@ func (b *raftConsensusBox) applyCommittedEntry(rawNode *raft.RawNode, entry raft
 		if err := json.Unmarshal(entry.Data, &value); err != nil {
 			return
 		}
-		b.committedSlot++
-		if b.commit != nil {
-			b.commit(b.committedSlot, value)
+		b.learnedSlot++
+		if b.learn != nil {
+			b.learn(b.learnedSlot, value)
 		}
 	}
 }

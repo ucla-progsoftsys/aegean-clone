@@ -82,7 +82,7 @@ func NewServer(name, host string, port int, clients []string, nodes []string, is
 		component, err := eo.NewEO(eo.Config{
 			Name:  name,
 			Peers: nodes,
-			Apply: func(entry eo.AppliedEntry) {
+			Commit: func(entry eo.CommittedEntry) {
 				_ = server.Exec.BufferExactOnceNestedResponse(entry.Entry.Response)
 			},
 			SendRaft: func(peer string, message raftpb.Message) error {

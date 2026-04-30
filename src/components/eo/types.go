@@ -18,32 +18,38 @@ type Entry struct {
 	Response  map[string]any `json:"response"`
 }
 
-// AppliedEntry is delivered to the application once a committed slot becomes
-// contiguous and safe to apply.
-type AppliedEntry struct {
+// CommittedEntry is delivered to the application once a learned slot becomes
+// contiguous, deduplicated by request id, and safe to commit to the executor.
+type CommittedEntry struct {
 	Slot  uint64 `json:"slot"`
 	Entry Entry  `json:"entry"`
 }
 
-// ExecuteFunc runs the request on the primary before the result is proposed.
+// AppliedEntry is kept as a compatibility alias for older callers.
+type AppliedEntry = CommittedEntry
+
+// ExecuteFunc runs the request on the leader before the result is proposed.
 type ExecuteFunc func(requestID string, request map[string]any) (map[string]any, error)
 
-// ApplyFunc receives entries once EO has committed and applied them in slot order.
-type ApplyFunc func(entry AppliedEntry)
+// CommitFunc receives deduplicated entries once EO processes them in slot order.
+type CommitFunc func(entry CommittedEntry)
 
-// ForwardFunc forwards a client request to the current primary.
-type ForwardFunc func(primary string, requestID string, request map[string]any) error
+// ApplyFunc is kept as a compatibility alias for older callers.
+type ApplyFunc = CommitFunc
+
+// ForwardFunc forwards a client request to the current leader.
+type ForwardFunc func(leader string, requestID string, request map[string]any) error
 
 // SendRaftFunc ships a raft protocol message to a remote peer.
 type SendRaftFunc func(peer string, message raftpb.Message) error
 
-// CommitFunc is invoked by the consensus box whenever a replicated entry is committed.
-type CommitFunc func(slot uint64, entry Entry)
+// LearnFunc is invoked by the consensus box whenever a replicated entry is learned.
+type LearnFunc func(slot uint64, entry Entry)
 
 // ConsensusBox is the ordered replication abstraction used by EO.
 type ConsensusBox interface {
-	IsPrimary() bool
-	Primary() (string, bool)
+	IsLeader() bool
+	Leader() (string, bool)
 	Propose(entry Entry) error
 	HandleMessage(message raftpb.Message) error
 	Stop()
@@ -62,13 +68,14 @@ type BoxConfig struct {
 }
 
 // BoxFactory allows tests to swap in a fake consensus implementation.
-type BoxFactory func(cfg BoxConfig, onCommit CommitFunc) (ConsensusBox, error)
+type BoxFactory func(cfg BoxConfig, onLearn LearnFunc) (ConsensusBox, error)
 
 // Config constructs an EO instance.
 type Config struct {
 	Name            string
 	Peers           []string
 	Execute         ExecuteFunc
+	Commit          CommitFunc
 	Apply           ApplyFunc
 	Forward         ForwardFunc
 	SendRaft        SendRaftFunc

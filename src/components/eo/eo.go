@@ -10,15 +10,18 @@ import (
 type EO struct {
 	name    string
 	execute ExecuteFunc
-	apply   ApplyFunc
+	commit  CommitFunc
 	forward ForwardFunc
 	box     ConsensusBox
 
-	mu       sync.Mutex
-	log      map[uint64]Entry
-	commit   uint64
-	applied  uint64
-	requests map[string]struct{}
+	processMu         sync.Mutex
+	mu                sync.Mutex
+	log               map[uint64]Entry
+	learned           uint64
+	processed         uint64
+	requestAttempts   map[string]struct{}
+	learnedSlots      map[uint64]struct{}
+	committedRequests map[string]struct{}
 }
 
 func NewEO(cfg Config) (*EO, error) {
@@ -36,13 +39,20 @@ func NewEO(cfg Config) (*EO, error) {
 		factory = newRaftConsensusBox
 	}
 
+	commit := cfg.Commit
+	if commit == nil {
+		commit = cfg.Apply
+	}
+
 	e := &EO{
-		name:     cfg.Name,
-		execute:  cfg.Execute,
-		apply:    cfg.Apply,
-		forward:  cfg.Forward,
-		log:      make(map[uint64]Entry),
-		requests: make(map[string]struct{}),
+		name:              cfg.Name,
+		execute:           cfg.Execute,
+		commit:            commit,
+		forward:           cfg.Forward,
+		log:               make(map[uint64]Entry),
+		requestAttempts:   make(map[string]struct{}),
+		learnedSlots:      make(map[uint64]struct{}),
+		committedRequests: make(map[string]struct{}),
 	}
 
 	box, err := factory(BoxConfig{
@@ -54,7 +64,7 @@ func NewEO(cfg Config) (*EO, error) {
 		HeartbeatTick:   cfg.HeartbeatTick,
 		MaxInflightMsgs: cfg.MaxInflightMsgs,
 		MaxSizePerMsg:   cfg.MaxSizePerMsg,
-	}, e.OnCommit)
+	}, e.Learn)
 	if err != nil {
 		return nil, err
 	}
@@ -66,12 +76,22 @@ func (e *EO) Name() string {
 	return e.name
 }
 
-func (e *EO) IsPrimary() bool {
-	return e.box.IsPrimary()
+func (e *EO) IsLeader() bool {
+	return e.box.IsLeader()
 }
 
+// IsPrimary is kept as a compatibility alias for older callers.
+func (e *EO) IsPrimary() bool {
+	return e.IsLeader()
+}
+
+func (e *EO) Leader() (string, bool) {
+	return e.box.Leader()
+}
+
+// Primary is kept as a compatibility alias for older callers.
 func (e *EO) Primary() (string, bool) {
-	return e.box.Primary()
+	return e.Leader()
 }
 
 func (e *EO) Stop() {
@@ -109,6 +129,36 @@ func (e *EO) HandleRequest(requestID string, request map[string]any) map[string]
 	requestCopy := cloneMap(request)
 	requestCopy["request_id"] = requestID
 
+	if !e.box.IsLeader() {
+		leader, ok := e.box.Leader()
+		if !ok || leader == "" {
+			return map[string]any{
+				"status":     "waiting_for_leader",
+				"request_id": requestID,
+			}
+		}
+		if e.forward == nil {
+			return map[string]any{
+				"status":     "not_leader",
+				"request_id": requestID,
+				"leader":     leader,
+			}
+		}
+		if err := e.forward(leader, requestID, requestCopy); err != nil {
+			return map[string]any{
+				"status":     "forward_error",
+				"request_id": requestID,
+				"leader":     leader,
+				"error":      err.Error(),
+			}
+		}
+		return map[string]any{
+			"status":     "forwarded_to_leader",
+			"request_id": requestID,
+			"leader":     leader,
+		}
+	}
+
 	if e.execute == nil {
 		return map[string]any{
 			"status":     "execution_error",
@@ -117,37 +167,7 @@ func (e *EO) HandleRequest(requestID string, request map[string]any) map[string]
 		}
 	}
 
-	if !e.box.IsPrimary() {
-		primary, ok := e.box.Primary()
-		if !ok || primary == "" {
-			return map[string]any{
-				"status":     "waiting_for_primary",
-				"request_id": requestID,
-			}
-		}
-		if e.forward == nil {
-			return map[string]any{
-				"status":     "not_primary",
-				"request_id": requestID,
-				"primary":    primary,
-			}
-		}
-		if err := e.forward(primary, requestID, requestCopy); err != nil {
-			return map[string]any{
-				"status":     "forward_error",
-				"request_id": requestID,
-				"primary":    primary,
-				"error":      err.Error(),
-			}
-		}
-		return map[string]any{
-			"status":     "forwarded_to_primary",
-			"request_id": requestID,
-			"primary":    primary,
-		}
-	}
-
-	if !e.tryStartRequest(requestID) {
+	if !e.tryAcceptRequest(requestID) {
 		return map[string]any{
 			"status":     "duplicate_request",
 			"request_id": requestID,
@@ -203,43 +223,68 @@ func (e *EO) HandleRaftMessage(payload map[string]any) map[string]any {
 	return map[string]any{"status": "raft_message_accepted"}
 }
 
-// OnCommit is the callback that the consensus box invokes when a slot commits.
-func (e *EO) OnCommit(slot uint64, entry Entry) {
+// Learn is the callback that the consensus box invokes when a slot is learned.
+func (e *EO) Learn(slot uint64, entry Entry) {
 	e.mu.Lock()
-	if _, exists := e.log[slot]; exists {
+	if _, exists := e.learnedSlots[slot]; exists {
 		e.mu.Unlock()
 		return
 	}
+	e.learnedSlots[slot] = struct{}{}
 	e.log[slot] = entry
-	if slot > e.commit {
-		e.commit = slot
+	if slot > e.learned {
+		e.learned = slot
 	}
 	e.mu.Unlock()
 
-	e.TryApply()
+	e.Process()
 }
 
-// TryApply best-effort applies every contiguous committed slot.
-func (e *EO) TryApply() {
-	appliedEntries := e.dequeueContiguousAppliedEntries()
-	if e.apply == nil {
+// OnCommit is kept as a compatibility alias for older consensus-box callbacks.
+func (e *EO) OnCommit(slot uint64, entry Entry) {
+	e.Learn(slot, entry)
+}
+
+// Process best-effort processes every contiguous learned slot and commits only
+// the first learned occurrence of each request id to the executor.
+func (e *EO) Process() {
+	e.processMu.Lock()
+	defer e.processMu.Unlock()
+
+	committedEntries := e.dequeueCommittableEntries()
+	if e.commit == nil {
 		return
 	}
-	for _, entry := range appliedEntries {
-		e.apply(entry)
+	for _, entry := range committedEntries {
+		e.commit(entry)
 	}
 }
 
-func (e *EO) CommitIndex() uint64 {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.commit
+// TryApply is kept as a compatibility alias for older callers.
+func (e *EO) TryApply() {
+	e.Process()
 }
 
-func (e *EO) AppliedIndex() uint64 {
+func (e *EO) LearnedIndex() uint64 {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.applied
+	return e.learned
+}
+
+// CommitIndex is kept as a compatibility alias for older callers.
+func (e *EO) CommitIndex() uint64 {
+	return e.LearnedIndex()
+}
+
+func (e *EO) ProcessedIndex() uint64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.processed
+}
+
+// AppliedIndex is kept as a compatibility alias for older callers.
+func (e *EO) AppliedIndex() uint64 {
+	return e.ProcessedIndex()
 }
 
 func (e *EO) Entry(slot uint64) (Entry, bool) {
@@ -249,38 +294,42 @@ func (e *EO) Entry(slot uint64) (Entry, bool) {
 	return entry, ok
 }
 
-func (e *EO) tryStartRequest(requestID string) bool {
+func (e *EO) tryAcceptRequest(requestID string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if _, exists := e.requests[requestID]; exists {
+	if _, exists := e.requestAttempts[requestID]; exists {
 		return false
 	}
-	e.requests[requestID] = struct{}{}
+	e.requestAttempts[requestID] = struct{}{}
 	return true
 }
 
 func (e *EO) finishRequestFailure(requestID string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	delete(e.requests, requestID)
+	delete(e.requestAttempts, requestID)
 }
 
-func (e *EO) dequeueContiguousAppliedEntries() []AppliedEntry {
+func (e *EO) dequeueCommittableEntries() []CommittedEntry {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	appliedEntries := make([]AppliedEntry, 0)
+	committedEntries := make([]CommittedEntry, 0)
 	for {
-		nextSlot := e.applied + 1
-		if nextSlot > e.commit {
-			return appliedEntries
+		nextSlot := e.processed + 1
+		if nextSlot > e.learned {
+			return committedEntries
 		}
 		entry, ok := e.log[nextSlot]
 		if !ok {
-			return appliedEntries
+			return committedEntries
 		}
-		e.applied = nextSlot
-		appliedEntries = append(appliedEntries, AppliedEntry{
+		e.processed = nextSlot
+		if _, duplicate := e.committedRequests[entry.RequestID]; duplicate {
+			continue
+		}
+		e.committedRequests[entry.RequestID] = struct{}{}
+		committedEntries = append(committedEntries, CommittedEntry{
 			Slot:  nextSlot,
 			Entry: entry,
 		})
