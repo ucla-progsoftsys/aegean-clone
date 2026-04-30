@@ -33,13 +33,15 @@ services:
     - node3
     nodes:
     - node4
+    - node5
+    - node6
     exec_workflow: aegean_backend
     init_state_workflow: aegean_default
-    shimQuorumSize: 1
+    shimQuorumSize: 2
     verifyResponseQuorumSize: 1
-    execVerifyQuorumSize: 1
-    phaseQuorumSize: 1
-    expectedExecVotes: 1
+    execVerifyQuorumSize: 2
+    phaseQuorumSize: 2
+    expectedExecVotes: 3
     batcher_config:
       batch_size: 10
       batch_timeout_ms: 5
@@ -58,3 +60,9 @@ nodes:
   node4:
     service: backend
     is_primary_batcher: true
+  node5:
+    service: backend
+    is_primary_batcher: false
+  node6:
+    service: backend
+    is_primary_batcher: false
