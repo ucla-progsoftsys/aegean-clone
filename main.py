@@ -4,12 +4,14 @@ import logging
 import os
 import glob
 import re
+import shutil
 import shlex
 import statistics
 import subprocess
 import tempfile
 import time
 from datetime import datetime
+from email.message import EmailMessage
 
 import yaml
 
@@ -56,6 +58,49 @@ SOCIAL_LOCAL_REDIS_SERVICES = {
     "social_graph",
     "user_timeline",
 }
+
+
+def send_completion_email(to_address, subject, body):
+    sendmail_path = shutil.which("sendmail") or "/usr/sbin/sendmail"
+    if not os.path.exists(sendmail_path):
+        logger.warning("Could not send completion email: sendmail not found")
+        return False
+
+    from_address = os.environ.get("AEGEAN_EMAIL_FROM", "aegean@localhost")
+    message = EmailMessage()
+    message["From"] = from_address
+    message["To"] = to_address
+    message["Subject"] = subject
+    message.set_content(body)
+
+    result = subprocess.run(
+        [sendmail_path, "-t", "-oi"],
+        input=message.as_bytes(),
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace").strip()
+        logger.warning("Could not send completion email to %s: %s", to_address, stderr or result.returncode)
+        return False
+
+    logger.info("Completion email sent to %s", to_address)
+    return True
+
+
+def send_run_complete_email(to_address, completed_items, started_at):
+    elapsed_seconds = time.monotonic() - started_at
+    subject = "Aegean experiment complete"
+    lines = [
+        "Aegean experiment run complete.",
+        "",
+        f"Completed at: {datetime.now().isoformat(timespec='seconds')}",
+        f"Elapsed: {elapsed_seconds:.1f}s",
+    ]
+    if completed_items:
+        lines.extend(["", "Outputs:"])
+        lines.extend(f"- {item}" for item in completed_items)
+    send_completion_email(to_address, subject, "\n".join(lines) + "\n")
 
 
 def resolve_run_config_paths(run_config_path):
@@ -723,10 +768,16 @@ def main():
         default=1,
         help="Number of times to run the experiment (default: 1). Results are aggregated into aggregated_results.json.",
     )
+    parser.add_argument(
+        "--email",
+        help="Send a completion email to this address after all requested runs finish.",
+    )
     args = parser.parse_args()
 
     enable_pprof = args.enable_pprof
     enable_tracing = args.enable_tracing
+    started_at = time.monotonic()
+    completed_items = []
 
     if args.all:
         if args.config_path:
@@ -738,9 +789,15 @@ def main():
             parser.error("no run configs found under experiment/runs")
         for config_path in config_paths:
             if args.runs > 1:
-                run_experiment_n_times(config_path, args.runs, enable_pprof=enable_pprof, enable_tracing=enable_tracing)
+                output_path = run_experiment_n_times(
+                    config_path, args.runs, enable_pprof=enable_pprof, enable_tracing=enable_tracing
+                )
+                completed_items.append(output_path)
             else:
-                run_experiment(config_path, enable_pprof=enable_pprof, enable_tracing=enable_tracing)
+                run_dir, _ = run_experiment(config_path, enable_pprof=enable_pprof, enable_tracing=enable_tracing)
+                completed_items.append(run_dir)
+        if args.email:
+            send_run_complete_email(args.email, completed_items, started_at)
         return
 
     if args.config_dir:
@@ -754,11 +811,15 @@ def main():
             parser.error(f"no run configs found under {config_dir}")
         for config_path in config_paths:
             if args.runs > 1:
-                run_experiment_n_times(
+                output_path = run_experiment_n_times(
                     config_path, args.runs, enable_pprof=enable_pprof, enable_tracing=enable_tracing
                 )
+                completed_items.append(output_path)
             else:
-                run_experiment(config_path, enable_pprof=enable_pprof, enable_tracing=enable_tracing)
+                run_dir, _ = run_experiment(config_path, enable_pprof=enable_pprof, enable_tracing=enable_tracing)
+                completed_items.append(run_dir)
+        if args.email:
+            send_run_complete_email(args.email, completed_items, started_at)
         return
 
     if not args.config_path:
@@ -768,9 +829,14 @@ def main():
         output_path = run_experiment_n_times(
             args.config_path, args.runs, enable_pprof=enable_pprof, enable_tracing=enable_tracing,
         )
+        completed_items.append(output_path)
         print(f"Aggregated results: {output_path}")
     else:
-        run_experiment(args.config_path, enable_pprof=enable_pprof, enable_tracing=enable_tracing)
+        run_dir, _ = run_experiment(args.config_path, enable_pprof=enable_pprof, enable_tracing=enable_tracing)
+        completed_items.append(run_dir)
+
+    if args.email:
+        send_run_complete_email(args.email, completed_items, started_at)
 
 
 if __name__ == "__main__":
