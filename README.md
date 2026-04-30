@@ -12,4 +12,5 @@ To use distributed:
 2. python setup/ssh_config.py distributed
 3. python setup/hosts.py distributed
 4. python setup/install.py [# of nodes]
-5. python setup/repo.py [# of nodes]
+5. python setup/repo.py [# of nodes] [optionally --upload]
+6. 

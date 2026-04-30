@@ -38,6 +38,7 @@ if [ -e /app ]; then
   $SUDO rm -rf /app
 fi
 $SUDO git clone {shell_quote(REPO_URL)} /app
+$SUDO chown -R "$(id -un):$(id -gn)" /app
 """
     return body
 
@@ -61,6 +62,7 @@ if [ -e /app ]; then
 fi
 $SUDO mkdir -p /app
 $SUDO tar -xf - -C /app
+$SUDO chown -R "$(id -un):$(id -gn)" /app
 """
     return body
 
@@ -113,6 +115,8 @@ def run_host_upload(host: str) -> subprocess.CompletedProcess[str]:
     tar_stderr = tar_proc.communicate()[1]
     if tar_proc.returncode != 0:
         stderr = tar_stderr.decode() if tar_stderr else "local tar command failed"
+        if "ssh_proc" in locals() and ssh_proc.stderr:
+            stderr = stderr + ssh_proc.stderr.decode()
         return subprocess.CompletedProcess(ssh_proc.args if "ssh_proc" in locals() else ["ssh", host], 1, "", stderr)
     return subprocess.CompletedProcess(
         ssh_proc.args,

@@ -236,16 +236,18 @@ def _remote_rpc(node_name, path, payload=None, timeout=5):
 
 def build_binary(build_node):
     logger.info("Building shared binary on %s", build_node)
-    _ssh_shell(
+    result = _ssh_shell(
         build_node,
         (
             "mkdir -p /app/bin /app/.gomodcache /tmp/go-build || exit 1; "
             "cd /app/src || exit 1; "
             "export GOMODCACHE=/app/.gomodcache; "
             "export GOCACHE=/tmp/go-build; "
-            f"go build -o {shlex.quote(REMOTE_BINARY_PATH)} ."
+            f"go build -buildvcs=false -o {shlex.quote(REMOTE_BINARY_PATH)} ."
         ),
     )
+    if result.returncode != 0:
+        raise RuntimeError(f"failed to build shared binary on {build_node}")
 
 
 def node_local_redis_env(run_config, service_name):
@@ -278,8 +280,8 @@ def node_local_redis_env(run_config, service_name):
 
 def launch_nodes(node_names, node_services, config_path, run_config, enable_pprof=False, enable_tracing=False):
     logger.info("Launching %d nodes", len(node_names))
-    if node_names:
-        build_binary(node_names[0])
+    for name in node_names:
+        build_binary(name)
 
     remote_config_path = shlex.quote(f"../{config_path}")
     profiled_node = os.environ.get("AEGEAN_PROFILE_NODE", "").strip()
@@ -318,7 +320,7 @@ def launch_nodes(node_names, node_services, config_path, run_config, enable_ppro
                 "--daemonize yes || exit 1; "
             )
         redis_env_prefix = (redis_env + " ") if redis_env else ""
-        _ssh_shell(
+        result = _ssh_shell(
             name,
             (
                 "mkdir -p /app/.gomodcache /tmp/go-build || exit 1; "
@@ -333,6 +335,8 @@ def launch_nodes(node_names, node_services, config_path, run_config, enable_ppro
                 "> /tmp/node.log 2>&1 &"
             ),
         )
+        if result.returncode != 0:
+            raise RuntimeError(f"failed to launch node {name}")
 
 def stop_docker_nodes(node_names):
     logger.info("Stopping %d nodes", len(node_names))
