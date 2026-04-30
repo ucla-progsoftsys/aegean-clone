@@ -14,6 +14,13 @@ read_key_mod: 1000
 key_count: 1000
 value_length: 100
 
+# Nested exact-once dispatch
+nested_use_eo: true
+aegean_nested_use_eo: true
+eo_tick_interval_ms: 10
+eo_election_tick: 10
+eo_heartbeat_tick: 1
+
 # Run & sytem configs
 run_timeout_seconds: 20
 parallel_window_k: 4
