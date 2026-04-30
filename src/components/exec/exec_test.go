@@ -12,17 +12,17 @@ import (
 )
 
 type fakeNestedEO struct {
-	primary   bool
+	isLeader  bool
 	leader    string
 	proposals []map[string]any
 	mu        sync.Mutex
 }
 
-func (f *fakeNestedEO) IsPrimary() bool {
-	return f.primary
+func (f *fakeNestedEO) IsLeader() bool {
+	return f.isLeader
 }
 
-func (f *fakeNestedEO) Primary() (string, bool) {
+func (f *fakeNestedEO) Leader() (string, bool) {
 	if f.leader == "" {
 		return "", false
 	}
@@ -165,7 +165,7 @@ func TestExecRunConfigOverrides(t *testing.T) {
 	}
 }
 
-func TestExecDispatchNestedRequestEOOnlyPrimarySends(t *testing.T) {
+func TestExecDispatchNestedRequestEOOnlyLeaderSends(t *testing.T) {
 	server := startTestServer(t, nil)
 	defer server.close()
 
@@ -174,8 +174,8 @@ func TestExecDispatchNestedRequestEOOnlyPrimarySends(t *testing.T) {
 	leaderExec := NewExec("node1", []string{"node1"}, nil, verifierCh, shimCh, 1, testExecuteRequest, nil, requiredExecRunConfigWithEO())
 	followerExec := NewExec("node2", []string{"node2"}, nil, verifierCh, shimCh, 1, testExecuteRequest, nil, requiredExecRunConfigWithEO())
 
-	leaderExec.SetNestedEO(&fakeNestedEO{primary: true, leader: "node1"})
-	followerExec.SetNestedEO(&fakeNestedEO{primary: false, leader: "node1"})
+	leaderExec.SetNestedEO(&fakeNestedEO{isLeader: true, leader: "node1"})
+	followerExec.SetNestedEO(&fakeNestedEO{isLeader: false, leader: "node1"})
 
 	request := map[string]any{"request_id": "parent"}
 	outgoing := map[string]any{
@@ -204,7 +204,7 @@ func TestExecDispatchNestedRequestEOOnlyPrimarySends(t *testing.T) {
 func TestExecHandleNestedResponseMessageEOProposesAndApplies(t *testing.T) {
 	exec, _, _ := newTestExec("node1", []string{"node1"}, nil)
 	exec.RunConfig["nested_use_eo"] = true
-	fakeEO := &fakeNestedEO{primary: false, leader: "node1"}
+	fakeEO := &fakeNestedEO{isLeader: false, leader: "node1"}
 	exec.SetNestedEO(fakeEO)
 
 	request := map[string]any{"request_id": "parent"}
@@ -217,7 +217,7 @@ func TestExecHandleNestedResponseMessageEOProposesAndApplies(t *testing.T) {
 		"op_payload":        map[string]any{},
 	}
 	exec.DispatchNestedRequestEO(request, []string{"unreachable.invalid"}, outgoing)
-	fakeEO.primary = true
+	fakeEO.isLeader = true
 
 	responsePayload := map[string]any{
 		"type":              "response",

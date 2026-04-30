@@ -3,8 +3,8 @@ package exec
 import "sync"
 
 type NestedEOReplicator interface {
-	IsPrimary() bool
-	Primary() (string, bool)
+	IsLeader() bool
+	Leader() (string, bool)
 	ProposeResponsePayload(requestID string, payload map[string]any) error
 }
 
@@ -25,10 +25,10 @@ const (
 )
 
 const (
-	nestedResponseIgnoredStatus           = "eo_nested_response_ignored"
-	nestedResponseWaitingForPrimaryStatus = "eo_nested_response_waiting_for_primary"
-	nestedResponseProposedStatus          = "eo_nested_response_proposed"
-	nestedResponseAlreadyProposedStatus   = "eo_nested_response_already_proposed"
+	nestedResponseIgnoredStatus          = "eo_nested_response_ignored"
+	nestedResponseWaitingForLeaderStatus = "eo_nested_response_waiting_for_leader"
+	nestedResponseProposedStatus         = "eo_nested_response_proposed"
+	nestedResponseAlreadyProposedStatus  = "eo_nested_response_already_proposed"
 )
 
 type nestedDispatchTracker struct {
@@ -50,7 +50,7 @@ func (e *Exec) NestedEOReady() bool {
 	if e.nestedEO == nil {
 		return true
 	}
-	_, ok := e.nestedEO.Primary()
+	_, ok := e.nestedEO.Leader()
 	return ok
 }
 
@@ -122,11 +122,11 @@ func (e *Exec) nextEODispatchAction(prepared map[string]any) eoDispatchAction {
 		return eoDispatchSkip
 	}
 
-	if e.nestedEO.IsPrimary() {
+	if e.nestedEO.IsLeader() {
 		return eoDispatchSendDirect
 	}
 
-	if _, ok := e.nestedEO.Primary(); !ok {
+	if _, ok := e.nestedEO.Leader(); !ok {
 		return eoDispatchSendDirect
 	}
 
@@ -152,9 +152,9 @@ func (e *Exec) nestedResponseState(payload map[string]any) (string, nestedDispat
 }
 
 func (e *Exec) handlePendingNestedResponse(requestID string, payload map[string]any) (map[string]any, bool) {
-	if !e.nestedEO.IsPrimary() {
-		if _, ok := e.nestedEO.Primary(); ok {
-			return nestedResponseStatus(requestID, nestedResponseWaitingForPrimaryStatus), true
+	if !e.nestedEO.IsLeader() {
+		if _, ok := e.nestedEO.Leader(); ok {
+			return nestedResponseStatus(requestID, nestedResponseWaitingForLeaderStatus), true
 		}
 		return nil, false
 	}
