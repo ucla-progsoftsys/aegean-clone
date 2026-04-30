@@ -11,7 +11,7 @@ import (
 func TestLoadRunConfigResolvesArchitectureSiblingToRunsDir(t *testing.T) {
 	root := t.TempDir()
 	architectureDir := filepath.Join(root, "experiment", "architecture")
-	runDir := filepath.Join(root, "experiment", "runs", "basic_oha_large_req")
+	runDir := filepath.Join(root, "experiment", "runs", "basic_oha_large")
 
 	if err := os.MkdirAll(architectureDir, 0o755); err != nil {
 		t.Fatalf("mkdir architecture dir: %v", err)

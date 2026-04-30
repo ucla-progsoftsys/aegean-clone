@@ -14,7 +14,7 @@ from plot_utils import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_RESULTS_DIR = REPO_ROOT / "results" / "basic_open_large_req"
+DEFAULT_RESULTS_DIR = REPO_ROOT / "results" / "basic_open_large"
 QPS_DIR_RE = re.compile(r"qps_(\d+)$")
 
 

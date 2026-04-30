@@ -14,7 +14,7 @@ from plot_utils import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_RESULTS_DIR = REPO_ROOT / "results" / "basic_closed_large_req_conn"
+DEFAULT_RESULTS_DIR = REPO_ROOT / "results" / "basic_closed_large_conn"
 CONN_DIR_RE = re.compile(r"conn_(\d+)$")
 
 
