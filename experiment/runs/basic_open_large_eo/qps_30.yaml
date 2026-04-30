@@ -1,5 +1,5 @@
 ---
-architecture: basic_open.yaml
+architecture: basic_open_eo.yaml
 
 # K6 configs
 k6_qps: 30
