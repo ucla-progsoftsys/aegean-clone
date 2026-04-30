@@ -27,6 +27,11 @@ class MetricPoint:
 
 
 QPS_DIR_RE = re.compile(r"qps_(\d+)$")
+SERIES_COLORS = {
+    "Aegean": "#08306b",
+    "Aegean+EO": "#6baed6",
+    "Unreplicated": "#555555",
+}
 
 
 def humanize_workload_name(workload_name: str) -> str:
@@ -35,10 +40,10 @@ def humanize_workload_name(workload_name: str) -> str:
 
 def series_label(series_dir: Path, workload_name: str) -> str:
     if series_dir.name == f"{workload_name}_eo":
-        return "EO"
+        return "Aegean+EO"
     if series_dir.name == f"{workload_name}_unreplicated":
         return "Unreplicated"
-    return "Direct"
+    return "Aegean"
 
 
 def existing_series_dirs(results_root: Path, workload_name: str) -> list[Path]:
@@ -131,14 +136,24 @@ def plot_latency_vs_throughput(
         throughput = [point.throughput for point in points]
         median_ms = [point.median_ms for point in points]
         p90_ms = [point.p90_ms for point in points]
+        color = SERIES_COLORS.get(label)
 
-        plt.plot(throughput, median_ms, marker="o", linewidth=2, label=f"{label} Median")
+        plt.plot(
+            throughput,
+            median_ms,
+            marker="o",
+            linewidth=2,
+            linestyle="-",
+            color=color,
+            label=f"{label} Median",
+        )
         plt.plot(
             throughput,
             p90_ms,
             marker="s",
             linewidth=2,
-            linestyle="--",
+            linestyle=":",
+            color=color,
             label=f"{label} P90",
         )
 

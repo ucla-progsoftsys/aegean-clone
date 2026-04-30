@@ -12,7 +12,7 @@ from latency_vs_throughput_utils import (
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Plot req_race latency against realized throughput for direct and EO."
+        description="Plot req_race latency against realized throughput for Aegean and Aegean+EO."
     )
     parser.add_argument("--results-root", type=Path, default=DEFAULT_RESULTS_ROOT)
     parser.add_argument(
@@ -25,8 +25,8 @@ def main() -> None:
         title="Req Race Latency vs Realized Throughput",
         output_path=args.results_root / "req_race" / args.filename,
         series_specs=[
-            SeriesSpec("Direct", args.results_root / "req_race"),
-            SeriesSpec("EO", args.results_root / "req_race_eo"),
+            SeriesSpec("Aegean", args.results_root / "req_race"),
+            SeriesSpec("Aegean+EO", args.results_root / "req_race_eo"),
             SeriesSpec("Unreplicated", args.results_root / "req_race_unreplicated"),
         ],
     )
